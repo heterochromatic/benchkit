@@ -1,0 +1,131 @@
+{
+  "title": "Fixture bench (tests only)",
+  "methodology_version": "test",
+  "platforms": {
+    "clay": {
+      "name": "Clay",
+      "label": "Clay",
+      "agent_interface": "the Clay API",
+      "credential_env": [
+        "CLAY_API_KEY"
+      ],
+      "usage_method": "per_table",
+      "parallel_cost_runs": true,
+      "quote_only": false,
+      "tiers": {
+        "launch": {
+          "plan_monthly": 185,
+          "seat_price": 0
+        }
+      },
+      "unit_prices": {
+        "data_credits": 0.05
+      },
+      "task_tiers": {
+        "X1": "launch"
+      }
+    },
+    "acme": {
+      "name": "Acmedata",
+      "label": "Vendor A",
+      "agent_interface": "the Acmedata API",
+      "credential_env": [
+        "ACME_API_KEY"
+      ],
+      "usage_method": "balance",
+      "parallel_cost_runs": false,
+      "quote_only": false,
+      "tiers": {
+        "basic": {
+          "plan_monthly": 0,
+          "seat_price": 50
+        }
+      },
+      "unit_prices": {
+        "credits": 0.02
+      },
+      "task_tiers": {
+        "X1": "basic"
+      }
+    },
+    "quoteco": {
+      "name": "Quoteco",
+      "label": "Vendor B",
+      "agent_interface": "the Quoteco API",
+      "credential_env": [
+        "QUOTECO_API_KEY"
+      ],
+      "usage_method": "balance",
+      "parallel_cost_runs": false,
+      "quote_only": true,
+      "tiers": {
+        "pro": {
+          "plan_monthly": null,
+          "seat_price": null
+        }
+      },
+      "unit_prices": {
+        "credits": null
+      },
+      "task_tiers": {
+        "X1": "pro"
+      }
+    }
+  },
+  "scenario": {
+    "users": 3,
+    "records_per_month": 5000,
+    "projection_task": "X1"
+  },
+  "verifier": {
+    "email_service": "zerobounce",
+    "email_api_env": "ZEROBOUNCE_API_KEY",
+    "accept_email_statuses": [
+      "valid"
+    ],
+    "accept_phone_statuses": [
+      "valid"
+    ]
+  },
+  "summary_metrics": {
+    "X1": [
+      "email_fill_rate"
+    ]
+  },
+  "agent": {
+    "command": "claude",
+    "model": "claude-opus-5-5",
+    "timeout_min": 60,
+    "max_budget_usd": 10,
+    "allowed_tools": [
+      "Bash",
+      "Read",
+      "Write"
+    ],
+    "default_repetitions": 5,
+    "tasks": [
+      "X1"
+    ]
+  },
+  "common_agent_rules": [
+    "Use only {platform_name}, through {agent_interface}.",
+    "Credentials are in {credential_env}. Never print them.",
+    "Name anything you create '{run_id}'."
+  ],
+  "tasks": {
+    "X1": {
+      "version": "X1-v1",
+      "input": "x1-input.csv",
+      "rows": 3,
+      "output_columns": [
+        "input_id",
+        "email"
+      ],
+      "floor": {
+        "accepted_email_rate": 0.5
+      },
+      "instruction": "Find a work email for each row in input/{input}. Save output/output.csv with columns {columns}."
+    }
+  },
+  "price_effective_date": "2026-11-03"
+}
