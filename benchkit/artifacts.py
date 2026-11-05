@@ -15,7 +15,23 @@ from . import __version__, paths, runs, summary
 from .adapters import REDACTED, SECRET_KEYS
 
 
+def prereg_missing(cfg):
+    """Dotted config paths listed in prereg_required that are still empty: decisions the method
+    says must be made, and written down, before freezing."""
+    missing = []
+    for dotted in cfg.get("prereg_required", []):
+        v = cfg
+        for part in dotted.split("."):
+            v = v.get(part) if isinstance(v, dict) else None
+        if v in (None, "", [], {}):
+            missing.append(dotted)
+    return missing
+
+
 def freeze(cfg):
+    undecided = prereg_missing(cfg)
+    if undecided:
+        raise runs.RunError(f"Can't freeze: still undecided in the config: {', '.join(undecided)}")
     tasks = {}
     for tid, t in cfg["tasks"].items():
         src = paths.datasets() / t["input"]

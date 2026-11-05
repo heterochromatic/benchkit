@@ -19,7 +19,7 @@ RUN_COLUMNS = [
     "records_in", "records_accepted", "accepted_rate", "quality_floor_met", "usage_units",
     "usage_cost_usd", "add_on_tools", "add_on_cost_usd", "seat_cost_usd_month",
     "plan_floor_usd_month", "cost_per_accepted_record_usd", "cost_per_1000_accepted_usd", "agent_cost_usd",
-    "quote_required", "endpoint", "median_latency_ms", "price_effective_date",
+    "quote_required", "endpoint", "median_latency_ms", "price_effective_date", "account_id", "cost_counted",
     "step_counter_1", "step_counter_2", "reset_verified", "in_ranking",
 ]
 
@@ -28,9 +28,22 @@ def final_status(run):
     return run["status"] or run["score"].get("proposed_status")
 
 
-def run_row(cfg, run):
+def cost_counted(all_runs):
+    """Run IDs whose cost counts: the first run of each task version's input on each account.
+    Vendors may not charge again for records an account has already enriched, so later runs
+    would look cheaper than a buyer's first run. Steps, time and quality still use every run."""
+    first = {}
+    for r in sorted(all_runs, key=lambda r: r["started_at"] or r["created_at"]):
+        if r["usage_units"] and final_status(r) in RANKED:
+            first.setdefault((r["task_version"], r["platform"], r["manual"].get("account_id") or "shared"), r["run_id"])
+    return set(first.values())
+
+
+def run_row(cfg, run, counted=True):
     m, s = run["manual"], run["score"]
     c = costs.run_costs(cfg, run)
+    if not counted:
+        c = dict.fromkeys(c, None) | {"seat_cost_usd_month": c["seat_cost_usd_month"], "plan_floor_usd_month": c["plan_floor_usd_month"]}
     status = final_status(run)
     return {
         "run_id": run["run_id"],
@@ -57,6 +70,7 @@ def run_row(cfg, run):
         if c["cost_per_accepted_record_usd"] is not None else None,
         "endpoint": run.get("endpoint"), "median_latency_ms": (run.get("script") or {}).get("median_latency_ms"),
         "price_effective_date": cfg.get("price_effective_date"),
+        "account_id": m.get("account_id") or "shared", "cost_counted": counted,
         "quote_required": run["quote_required"], "step_counter_1": m.get("step_counter_1"),
         "step_counter_2": m.get("step_counter_2"), "reset_verified": m.get("reset_verified"),
         "in_ranking": status in RANKED,
@@ -103,7 +117,8 @@ def write_all(cfg):
     out.mkdir(parents=True, exist_ok=True)
     priv.mkdir(parents=True, exist_ok=True)
     all_runs = runs.all_runs()
-    rows = [run_row(cfg, r) for r in all_runs]
+    counted = cost_counted(all_runs)
+    rows = [run_row(cfg, r, r["run_id"] in counted) for r in all_runs]
     scores = {r["run_id"]: r["score"].get("metrics", {}) for r in all_runs}
     with open(priv / "runs.csv", "w", newline="", encoding="utf-8") as f:
         wr = csv.DictWriter(f, fieldnames=RUN_COLUMNS, extrasaction="ignore")
@@ -112,12 +127,15 @@ def write_all(cfg):
 
     groups = {}
     for row in rows:
-        key = (row["task_id"], row["task_version"], row["platform_label"], row["endpoint"] or "", row["executor"])
+        # Profiles stay apart: one practitioner per platform is illustrative, not a sample to pool.
+        key = (row["task_id"], row["task_version"], row["platform_label"], row["endpoint"] or "", row["executor"],
+               row["operator_profile"])
         groups.setdefault(key, []).append(row)
     summary = []
-    for (task, ver, label, endpoint, ex), rs in sorted(groups.items()):
+    for (task, ver, label, endpoint, ex, profile), rs in sorted(groups.items()):
         ranked = [r for r in rs if r["in_ranking"]]
         rec = {"task_id": task, "task_version": ver, "platform_label": label, "endpoint": endpoint, "executor": ex,
+               "operator_profile": profile, "cost_runs": sum(r["cost_counted"] and r["in_ranking"] for r in rs),
                "runs": len(rs), "ranked_runs": len(ranked),
                "statuses": ";".join(f"{s}={sum(r['status'] == s for r in rs)}" for s in runs.STATUSES if any(r["status"] == s for r in rs)),
                "environment_labels": ";".join(sorted({r["environment_label"] for r in rs}))}
@@ -132,7 +150,7 @@ def write_all(cfg):
     loaded = {}
     proj = cfg["scenario"]["projection_task"]
     for name, p in cfg["platforms"].items():
-        t1 = [r for r in all_runs if r["platform"] == name and r["task_id"] == proj and final_status(r) in RANKED]
+        t1 = [r for r in all_runs if r["platform"] == name and r["task_id"] == proj and r["run_id"] in counted]
         fl = costs.fully_loaded(cfg, name, t1)
         loaded[p["label"]] = fl
     for rec in summary:

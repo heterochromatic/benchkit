@@ -36,3 +36,9 @@ Bench repos pin a tag. A frozen bench (tagged `v1.0-prereg`) never moves to a ne
 - `private/platforms.json` overlay merged into the config per platform key (real names, prices, tiers, `anonymity_extra_terms`); its SHA-256 is frozen in `run-plan.json` as `overlay_sha256`, and runs are refused if it changes.
 - `private/providers/` adapters join the endpoint roster, so vendor-identifying API code stays unpublished.
 - `check-anon` also flags `anonymity_extra_terms` from the overlay.
+
+## Apples-to-apples support (2026-11-04)
+
+- **Cost from the first run per account:** `summary.cost_counted` keeps cost only for the first ranked run of each task version's input on each `account_id` (new manual field, default `shared`). Later runs keep steps, time and quality; `summary.csv` reports `cost_runs`, and the fully loaded projection uses counted runs only.
+- **Operator profiles never pooled:** summary rows are split by `operator_profile`.
+- **Freeze gate:** `prereg_required` in the config lists dotted paths (e.g. `disclosures.control_provider`); `bench freeze` refuses while any is blank.

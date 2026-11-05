@@ -195,6 +195,29 @@ class BenchkitTest(unittest.TestCase):
         with self.assertRaises(runs.RunError):
             cli.cmd_agent_batch(cfg, type("A", (), {"task": "X1"})())
 
+    def test_cost_counts_first_run_per_account_and_profiles_split(self):
+        ids = []
+        for op, profile, acct in (("OP01", "first-timer", None), ("OP02", "first-timer", None),
+                                  ("OP03", "first-timer", "acme-2"), ("PR01", "practitioner", None)):
+            r = runs.new_run(self.cfg, "X1", "acme", "human", op, profile, "self-serve monthly")
+            runs.start(r["run_id"]); runs.stop(r["run_id"])
+            runs.set_usage(r["run_id"], before=100, after=90)
+            runs.record(r["run_id"], {"account_id": acct} if acct else {}, status="Pass")
+            ids.append(r["run_id"])
+        counted = summary.cost_counted(runs.all_runs())
+        self.assertEqual(counted, {ids[0], ids[2]})   # first on the shared account, first on acme-2
+        _, summ, _ = summary.write_all(self.cfg)
+        by_profile = {rec["operator_profile"]: rec for rec in summ}
+        self.assertEqual((by_profile["first-timer"]["runs"], by_profile["first-timer"]["cost_runs"]), (3, 2))
+        self.assertEqual(by_profile["practitioner"]["cost_runs"], 0)
+
+    def test_freeze_refuses_undecided(self):
+        cfg = dict(self.cfg, prereg_required=["disclosures.control_provider", "scenario.users"], disclosures={})
+        with self.assertRaises(runs.RunError) as e:
+            artifacts.freeze(cfg)
+        self.assertIn("disclosures.control_provider", str(e.exception))
+        self.assertNotIn("scenario.users", str(e.exception))
+
     def test_check_anon_catches_names_and_emails(self):
         p = self.root / "leak.csv"
         p.write_text("platform,contact\nAcmedata,x@example.com\n")

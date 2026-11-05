@@ -206,7 +206,7 @@ MANUAL_FIELDS = {
     "help_lookups": float, "errors_restarts": float, "active_min": float, "processing_min": float,
     "ease_rating_1to7": float, "add_on_cost_usd": float, "add_on_tools": str, "tool_version": str,
     "not_supported_citation": str, "failure_category": str, "reset_verified": str, "notes": str,
-    "pricing_snapshot_date": str, "starting_state_ok": str,
+    "pricing_snapshot_date": str, "starting_state_ok": str, "account_id": str,
 }
 
 
