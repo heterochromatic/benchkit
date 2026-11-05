@@ -5,7 +5,7 @@ import hashlib
 import json
 import sys
 
-from . import adapters, agent, artifacts, paths, runs, scoring, summary, verify
+from . import adapters, agent, artifacts, paths, runs, sanity, scoring, summary, verify
 
 
 def _units(pairs):
@@ -163,6 +163,26 @@ def cmd_audit(cfg, a):
     print("audit passed: manifest hashes match, every run has a status, no credentials, results clean")
 
 
+def cmd_sanity(cfg, a):
+    rows = sanity.run_sanity(cfg)
+    for task, check, ok, detail in rows:
+        print(f"{task:5} {check:7} {'PASS' if ok else 'SKIP' if ok is None else 'FAIL'}  {detail}")
+    if any(ok is False for *_, ok, _ in rows):
+        sys.exit(1)
+
+
+def cmd_export_public(cfg, a):
+    for f, n in artifacts.export_public(cfg):
+        print(f"{f.relative_to(paths.repo())}: {n} rows")
+
+
+def cmd_compliance(cfg, a):
+    c = agent.recheck(cfg, a.run_id)["agent"]["compliance"]
+    print(json.dumps(c, indent=1))
+    if not c["ok"]:
+        sys.exit(1)
+
+
 def cmd_check_anon(cfg, a):
     problems = summary.check_anonymized(cfg, a.paths or None)
     for pr in problems:
@@ -281,6 +301,16 @@ def build_parser():
 
     s = sub.add_parser("audit", help="check manifest hashes, statuses, redaction and published results")
     s.set_defaults(fn=cmd_audit)
+
+    s = sub.add_parser("sanity", help="graders vs the real answer keys: empty output accepts nothing, oracle scores perfectly")
+    s.set_defaults(fn=cmd_sanity)
+
+    s = sub.add_parser("export-public", help="write non-personal, non-held-out answer-key rows to datasets/public/")
+    s.set_defaults(fn=cmd_export_public)
+
+    s = sub.add_parser("compliance", help="re-check an agent run's transcript for non-platform sources")
+    s.add_argument("run_id")
+    s.set_defaults(fn=cmd_compliance)
 
     s = sub.add_parser("check-anon", help="fail if results/ names a vendor or contains emails")
     s.add_argument("paths", nargs="*", help="files to check (default: results/*.csv and *.json)")

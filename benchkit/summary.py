@@ -109,6 +109,15 @@ def warnings_for(cfg, all_runs):
             w.append(f"{r['run_id']}: no status yet (run `bench score` or record a status)")
         if r["executor"] == "human" and r["started_at"] and not m.get("active_min"):
             w.append(f"{r['run_id']}: active time not recorded from the recording")
+        comp = (r.get("agent") or {}).get("compliance")
+        if comp and not comp["ok"] and m.get("compliance_reviewed") != "yes":
+            w.append(f"{r['run_id']}: agent transcript flagged ({'; '.join(comp['flags'][:3])}); review, then record "
+                     "--compliance_reviewed yes (or Void the run)")
+        bal = r.get("usage_balance")
+        if r["usage_method"] == "per_table" and bal and bal.get("unit") in r["usage_units"]:
+            table, drop = r["usage_units"][bal["unit"]], bal["before"] - bal["after"]
+            if drop and abs(table - drop) / drop > 0.05:
+                w.append(f"{r['run_id']}: per-table {bal['unit']} {table} vs balance drop {drop} differ by more than 5%")
     return w
 
 

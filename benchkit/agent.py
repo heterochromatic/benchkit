@@ -1,12 +1,16 @@
-"""AI-agent executor. Runs Claude Code headless inside the run folder, records the
-same lifecycle as a human run (start/stop/lock), counts tool calls as steps,
-saves the transcript with credentials redacted."""
+"""AI-agent executor. Runs Claude Code headless in a throwaway workspace outside the bench repo
+(so answer keys aren't reachable by relative path), records the same lifecycle as a human run
+(start/stop/lock), counts tool calls as steps, saves the transcript with credentials redacted,
+and checks the transcript for sources other than the platform."""
 import json
 import os
+import re
+import shutil
 import subprocess
+import tempfile
 import time
 
-from . import runs
+from . import paths, runs
 from .adapters import REDACTED
 
 
@@ -69,6 +73,53 @@ def redact(text, secrets):
     return text
 
 
+URL_HOST = re.compile(r"https?://([A-Za-z0-9.-]+)")
+KEY_HINTS = ("ground-truth", "-gold", "answer_key", "answer-key", "private/datasets", "verifier-cache")
+
+
+def tool_inputs(lines):
+    """Every tool call's input, as (tool name, flattened text)."""
+    for line in lines:
+        try:
+            ev = json.loads(line)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if ev.get("type") != "assistant":
+            continue
+        for block in (ev.get("message") or {}).get("content") or []:
+            if isinstance(block, dict) and block.get("type") == "tool_use":
+                yield block.get("name", ""), json.dumps(block.get("input") or {})
+
+
+def compliance(cfg, platform, lines):
+    """Flag hosts outside the platform's allowed domains, and any reach for answer keys or the
+    bench repo. A flagged run is reviewed by a person before it can be ranked."""
+    allowed = cfg["platforms"][platform].get("allowed_domains", []) + cfg["agent"].get("allowed_domains_common", [])
+    root = str(paths.root())
+    flags, hosts = [], set()
+    for tool, text in tool_inputs(lines):
+        for host in URL_HOST.findall(text):
+            host = host.lower().rstrip(".")
+            hosts.add(host)
+            if not any(host == d or host.endswith("." + d) for d in allowed):
+                flags.append(f"{tool}: request to {host}")
+        if root in text or any(h in text for h in KEY_HINTS):
+            flags.append(f"{tool}: touches the bench repo or an answer key")
+        if tool in ("WebSearch", "WebFetch"):
+            flags.append(f"{tool}: web tool used")
+    return {"ok": not flags, "flags": sorted(set(flags))[:50], "hosts": sorted(hosts)}
+
+
+def recheck(cfg, run_id):
+    run = runs.load(run_id)
+    stream = runs.run_dir(run_id) / "transcript" / "stream.jsonl"
+    if not stream.exists():
+        raise runs.RunError(f"{run_id} has no transcript")
+    run.setdefault("agent", {})["compliance"] = compliance(cfg, run["platform"], stream.read_text(encoding="utf-8").splitlines())
+    runs.save(run)
+    return run
+
+
 def run_agent(cfg, run_id, dry_run=False) -> dict:
     run = runs.load(run_id)
     if run["executor"] != "agent":
@@ -91,11 +142,17 @@ def run_agent(cfg, run_id, dry_run=False) -> dict:
 
     env = _child_env(cfg, run["platform"])
     secrets = [os.environ.get(k) for k in cfg["platforms"][run["platform"]]["credential_env"]]
+    # shortcut: a temp folder blocks relative paths to the answer keys, not an absolute-path search;
+    # the compliance check flags that, and a container (TPC sim / Harbor) closes it fully.
+    ws = tempfile.mkdtemp(prefix="bench-agent-")
+    shutil.copytree(d / "input", f"{ws}/input")
+    for sub in ("output", "work"):
+        os.makedirs(f"{ws}/{sub}", exist_ok=True)
     runs.start(run_id)
     timed_out = False
     t0 = time.monotonic()
     try:
-        proc = subprocess.run(cmd, cwd=d, env=env, capture_output=True, text=True,
+        proc = subprocess.run(cmd, cwd=ws, env=env, capture_output=True, text=True,
                               timeout=a["timeout_min"] * 60)
         out, err, code = proc.stdout, proc.stderr, proc.returncode
     except subprocess.TimeoutExpired as e:
@@ -105,6 +162,10 @@ def run_agent(cfg, run_id, dry_run=False) -> dict:
         code = None
     finally:
         runs.stop(run_id)
+        for sub in ("output", "work"):
+            shutil.rmtree(d / sub, ignore_errors=True)
+            shutil.copytree(f"{ws}/{sub}", d / sub)
+        shutil.rmtree(ws, ignore_errors=True)
     elapsed = round((time.monotonic() - t0) / 60, 2)
 
     (d / "transcript" / "stream.jsonl").write_text(redact(out, secrets), encoding="utf-8")
@@ -127,6 +188,7 @@ def run_agent(cfg, run_id, dry_run=False) -> dict:
         "num_turns": result.get("num_turns"), "agent_cost_usd": result.get("total_cost_usd"),
         "is_error": result.get("is_error"), "duration_ms": result.get("duration_ms"),
         "not_supported_note": (d / "output" / "not_supported.md").exists(),
+        "compliance": compliance(cfg, run["platform"], out.splitlines()),
     }
     if timed_out:
         run["status"], run["status_source"] = "Did not finish", "agent-timeout"

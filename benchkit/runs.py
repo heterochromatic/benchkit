@@ -196,6 +196,9 @@ def set_usage(run_id, before=None, after=None, units=None, unit=None) -> dict:
         if not units:
             raise RunError("This platform uses per-table attribution: pass --units name=value (e.g. data_credits=812 actions=1000)")
         run["usage_units"] = units
+        if before is not None and after is not None:
+            # Second reading from the balance (sequential runs only): checked against the per-table figure.
+            run["usage_balance"] = {"before": before, "after": after, "unit": unit or next(iter(units))}
     run["usage_recorded_at"] = now()
     save(run)
     return run
@@ -207,6 +210,7 @@ MANUAL_FIELDS = {
     "ease_rating_1to7": float, "add_on_cost_usd": float, "add_on_tools": str, "tool_version": str,
     "not_supported_citation": str, "failure_category": str, "reset_verified": str, "notes": str,
     "pricing_snapshot_date": str, "starting_state_ok": str, "account_id": str,
+    "compliance_reviewed": str,
 }
 
 

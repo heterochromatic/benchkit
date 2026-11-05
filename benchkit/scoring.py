@@ -7,6 +7,7 @@ Each bench repo defines its acceptance tests in scoring/scorers.py:
 A manual status (Not supported, Void, Did not finish, Not comparable) always wins over the proposal.
 """
 import csv
+import hashlib
 import json
 import re
 
@@ -154,6 +155,17 @@ def gold_metrics(out_by_id, gold_rows, email_col="email", phone_col="phone"):
         m[f"gold_{kind}_recall"] = rate(exact, len(rows))
         m[f"gold_{kind}_wrong"] = returned - exact
     return m
+
+
+def holdout_ids(ids, cfg):
+    """The held-out share of ids (config holdout.share), chosen by a salted hash so the split is
+    stable across runs. The salt lives in the private overlay, so outsiders can't tell which rows
+    are held out. Held-out rows are never published and are what re-runs are mainly scored on."""
+    h = cfg.get("holdout") or {}
+    share, salt = h.get("share", 0), h.get("salt", "")
+    if not share:
+        return set()
+    return {i for i in ids if int(hashlib.sha256(f"{salt}:{i}".encode()).hexdigest()[:8], 16) / 0xFFFFFFFF < share}
 
 
 def load_gold(name):

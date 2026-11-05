@@ -42,3 +42,10 @@ Bench repos pin a tag. A frozen bench (tagged `v1.0-prereg`) never moves to a ne
 - **Cost from the first run per account:** `summary.cost_counted` keeps cost only for the first ranked run of each task version's input on each `account_id` (new manual field, default `shared`). Later runs keep steps, time and quality; `summary.csv` reports `cost_runs`, and the fully loaded projection uses counted runs only.
 - **Operator profiles never pooled:** summary rows are split by `operator_profile`.
 - **Freeze gate:** `prereg_required` in the config lists dotted paths (e.g. `disclosures.control_provider`); `bench freeze` refuses while any is blank.
+
+## Rigor checks (2026-11-04)
+
+- `bench sanity`: empty-output and oracle checks on the real answer keys, in a throwaway folder (helpers `sanity.write_rows`, `sanity.mark_valid`).
+- Agent runs execute in a temp workspace outside the bench repo; transcript compliance check (`agent.compliance`, `bench compliance`) flags hosts outside `allowed_domains` and answer-key access; unreviewed flags fail `bench audit` and show in warnings. New manual field `compliance_reviewed`.
+- Held-out split (`scoring.holdout_ids`, salted), `bench export-public` (refuses emails and vendor names), canary in the run plan and exports.
+- Per-table usage can carry a balance reading; over 5% apart is a warning.

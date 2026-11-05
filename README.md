@@ -98,6 +98,19 @@ Each row's result goes to `cells/<input_id>.json` as soon as it arrives, and its
 - **Stopping:** an adapter raises `StopRun` when carrying on is pointless, for example out of credits. The run stops; `bench run --resume` continues it.
 - **Usage:** when an adapter implements `balance()`, usage is read before and after automatically.
 
+## Rigor checks
+
+```bash
+bench sanity          # every task: empty output accepts nothing; the scorers' ORACLES (answer key as output) score as expected
+bench export-public   # the scorers' PUBLIC_EXPORTS: non-personal key rows outside the held-out set, to datasets/public/
+bench compliance R7   # re-check an agent transcript for hosts outside allowed_domains and any reach for answer keys
+```
+
+- **Agent isolation:** agent runs execute in a temp folder outside the bench repo holding only their input; output and work are copied back. Keep `WebFetch`/`WebSearch` out of `agent.allowed_tools`; set `allowed_domains` per platform (competitors' in the private overlay) and `agent.allowed_domains_common`. Flagged runs need `--compliance_reviewed yes` or a Void status; `bench audit` fails otherwise.
+- **Held-out split:** `holdout.share` in the config, `holdout.salt` in the private overlay; `scoring.holdout_ids(ids, cfg)`.
+- **Canary:** `canary` in the config is written into `run-plan.json` and every public export.
+- **Second credit reading:** per-table platforms can also record `--before/--after --unit <unit>`; a gap over 5% is a warning.
+
 ## Run plan, manifest and audit
 
 ```bash

@@ -13,7 +13,7 @@ REPO = Path(__file__).resolve().parents[1]
 FIXTURE = Path(__file__).resolve().parent / "fixture_bench"
 sys.path.insert(0, str(REPO))
 
-from benchkit import adapters, agent, artifacts, cli, costs, paths, runs, scoring, summary, verify  # noqa: E402
+from benchkit import adapters, agent, artifacts, cli, costs, paths, runs, sanity, scoring, summary, verify  # noqa: E402
 
 
 def write_csv(path, header, rows):
@@ -217,6 +217,61 @@ class BenchkitTest(unittest.TestCase):
             artifacts.freeze(cfg)
         self.assertIn("disclosures.control_provider", str(e.exception))
         self.assertNotIn("scenario.users", str(e.exception))
+
+    def test_agent_runs_outside_repo_and_compliance_flags(self):
+        script = self.root / "fake-claude"
+        script.write_text("#!/bin/sh\n"
+                          "pwd > output/cwd.txt\n"
+                          "echo 'input_id,email' > output/output.csv\n"
+                          "echo '{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"tool_use\",\"name\":\"Bash\","
+                          "\"input\":{\"command\":\"curl https://api.clay.com/x; curl https://lookup.example.net/p; cat ../../datasets/t5-ground-truth.csv\"}}]}}'\n"
+                          "echo '{\"type\":\"result\",\"total_cost_usd\":0.1}'\n")
+        script.chmod(0o755)
+        cfg = dict(self.cfg, agent=dict(self.cfg["agent"], command=str(script)))
+        r = runs.new_run(cfg, "X1", "clay", "agent", "agent-x", "agent", "self-serve monthly")
+        run = agent.run_agent(cfg, r["run_id"])
+        d = runs.run_dir(r["run_id"])
+        self.assertTrue((d / "output" / "output.csv").exists())
+        self.assertNotIn(str(self.root), (d / "output" / "cwd.txt").read_text())
+        c = run["agent"]["compliance"]
+        self.assertFalse(c["ok"])
+        self.assertTrue(any("lookup.example.net" in f for f in c["flags"]))
+        self.assertTrue(any("answer key" in f for f in c["flags"]))
+        self.assertFalse(any("api.clay.com" in f for f in c["flags"]))
+        runs.record(r["run_id"], {}, status="Pass")
+        cli.main(["manifest"])
+        self.assertTrue(any("flagged and not reviewed" in e for e in artifacts.audit(cfg)))
+        runs.record(r["run_id"], {"compliance_reviewed": "yes"})
+        self.assertFalse(any("flagged" in e for e in artifacts.audit(cfg)))
+
+    def test_sanity_empty_and_oracle(self):
+        rows = sanity.run_sanity(self.cfg)
+        self.assertIn(("X1", "empty", True, "accepted 0"), rows)
+        self.assertIn(("X1", "oracle", True, "all keyed metrics match"), rows)
+        self.assertEqual(runs.all_runs(), [])   # nothing left in private/runs
+
+    def test_holdout_and_public_export(self):
+        ids = [str(i) for i in range(200)]
+        held = scoring.holdout_ids(ids, self.cfg)
+        self.assertTrue(60 < len(held) < 140)
+        self.assertEqual(held, scoring.holdout_ids(ids, self.cfg))
+        self.assertEqual(scoring.holdout_ids(ids, dict(self.cfg, holdout={"share": 0})), set())
+        out = self.root / "repo-copy"
+        import shutil
+        shutil.copytree(FIXTURE, out)
+        os.environ["BENCH_REPO"] = str(out)
+        try:
+            [(f, n)] = artifacts.export_public(self.cfg)
+            self.assertEqual(n, 3 - len(scoring.holdout_ids(["1", "2", "3"], self.cfg)))
+            self.assertIn("bench-canary", f.read_text())
+        finally:
+            os.environ["BENCH_REPO"] = str(FIXTURE)
+
+    def test_second_credit_reading(self):
+        r = runs.new_run(self.cfg, "X1", "clay", "human", "OP01", "first-timer", "self-serve monthly")
+        runs.set_usage(r["run_id"], before=1000, after=880, units={"data_credits": 100.0}, unit="data_credits")
+        runs.record(r["run_id"], {}, status="Pass")
+        self.assertTrue(any("differ by more than 5%" in w for w in summary.warnings_for(self.cfg, runs.all_runs())))
 
     def test_check_anon_catches_names_and_emails(self):
         p = self.root / "leak.csv"

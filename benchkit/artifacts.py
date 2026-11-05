@@ -7,11 +7,12 @@
 - `bench audit` checks the manifest against the files, that every run has a status, that no
   credential survived redaction, and that published results are clean.
 """
+import csv
 import json
 import os
 from datetime import datetime, timezone
 
-from . import __version__, paths, runs, summary
+from . import __version__, paths, runs, scoring, summary
 from .adapters import REDACTED, SECRET_KEYS
 
 
@@ -43,6 +44,8 @@ def freeze(cfg):
         "config_sha256": runs.sha256(paths.config_path()),
         "overlay_sha256": runs.overlay_sha256(),  # private names and prices: hash only
         "price_effective_date": cfg.get("price_effective_date"),
+        "canary": cfg.get("canary"),
+        "holdout_share": (cfg.get("holdout") or {}).get("share", 0),
         "platforms": sorted({p["label"] for p in cfg["platforms"].values()}),  # labels only: keys can name vendors
         "tasks": tasks,
     }
@@ -51,6 +54,27 @@ def freeze(cfg):
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(plan, indent=2) + "\n", encoding="utf-8")
     return plan, missing
+
+
+def export_public(cfg):
+    """Write the scorers' PUBLIC_EXPORTS (non-personal answer-key rows outside the held-out set) to
+    datasets/public/<name>.csv, for others to reproduce scoring. Refuses anything with an email."""
+    exports = getattr(scoring.plugin(), "PUBLIC_EXPORTS", {})
+    written = []
+    for name, fn in exports.items():
+        header, rows = fn(cfg)
+        f = paths.repo() / "datasets" / "public" / f"{name}.csv"
+        f.parent.mkdir(parents=True, exist_ok=True)
+        with open(f, "w", newline="", encoding="utf-8") as fh:
+            w = csv.writer(fh)
+            w.writerow([f"# {cfg.get('canary', '')}"] if cfg.get("canary") else [])
+            w.writerow(header)
+            w.writerows(rows)
+        if summary.check_anonymized(cfg, [f]):
+            f.unlink()
+            raise runs.RunError(f"{name}: export would publish a vendor name or an email address; not written")
+        written.append((f, len(rows)))
+    return written
 
 
 def build_manifest(cfg):
@@ -118,5 +142,9 @@ def audit(cfg):
                     errors += _unredacted(json.loads(text), f"{r['run_id']}/{f.relative_to(d)}")
                 except json.JSONDecodeError:
                     pass
+    for r in runs.all_runs():
+        comp = (r.get("agent") or {}).get("compliance")
+        if comp and not comp["ok"] and r["manual"].get("compliance_reviewed") != "yes" and summary.final_status(r) != "Void":
+            errors.append(f"{r['run_id']}: agent transcript flagged and not reviewed")
     errors += [f"results: {p}" for p in summary.check_anonymized(cfg)]
     return errors

@@ -23,7 +23,10 @@
       },
       "task_tiers": {
         "X1": "launch"
-      }
+      },
+      "allowed_domains": [
+        "clay.com"
+      ]
     },
     "acme": {
       "name": "Acmedata",
@@ -105,6 +108,9 @@
     "default_repetitions": 5,
     "tasks": [
       "X1"
+    ],
+    "allowed_domains_common": [
+      "pypi.org"
     ]
   },
   "common_agent_rules": [
@@ -127,5 +133,10 @@
       "instruction": "Find a work email for each row in input/{input}. Save output/output.csv with columns {columns}."
     }
   },
-  "price_effective_date": "2026-11-03"
+  "price_effective_date": "2026-11-03",
+  "canary": "bench-canary GUID 00000000-0000-4000-8000-000000000000",
+  "holdout": {
+    "share": 0.5,
+    "salt": "fixture"
+  }
 }
