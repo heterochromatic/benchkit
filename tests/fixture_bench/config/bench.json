@@ -130,7 +130,14 @@
       "floor": {
         "accepted_email_rate": 0.5
       },
-      "instruction": "Find a work email for each row in input/{input}. Save output/output.csv with columns {columns}."
+      "instruction": "Find a work email for each row in input/{input}. Save output/output.csv with columns {columns}.",
+      "review": {
+        "file": "sample.csv",
+        "sample": 2,
+        "columns": [
+          "matches"
+        ]
+      }
     }
   },
   "price_effective_date": "2026-11-03",

@@ -5,7 +5,7 @@ import hashlib
 import json
 import sys
 
-from . import adapters, agent, artifacts, paths, runs, sanity, scoring, summary, verify
+from . import adapters, agent, artifacts, paths, review, runs, sanity, scoring, summary, verify
 
 
 def _units(pairs):
@@ -171,6 +171,16 @@ def cmd_sanity(cfg, a):
         sys.exit(1)
 
 
+def cmd_blind_sample(cfg, a):
+    sheet, n = review.blind_sample(cfg, a.task, a.n)
+    print(f"{n} rows, platform hidden: {sheet}\nFill in the review columns, then `bench blind-import --task {a.task} --file <sheet>`")
+
+
+def cmd_blind_import(cfg, a):
+    for run_id, n in review.blind_import(cfg, a.task, a.file).items():
+        print(f"{run_id}: {n} reviewed rows")
+
+
 def cmd_export_public(cfg, a):
     for f, n in artifacts.export_public(cfg):
         print(f"{f.relative_to(paths.repo())}: {n} rows")
@@ -304,6 +314,16 @@ def build_parser():
 
     s = sub.add_parser("sanity", help="graders vs the real answer keys: empty output accepts nothing, oracle scores perfectly")
     s.set_defaults(fn=cmd_sanity)
+
+    s = sub.add_parser("blind-sample", help="mixed, shuffled sample of every run's output for blinded review")
+    s.add_argument("--task", required=True)
+    s.add_argument("--n", type=int, help="rows per run (default: the task's review.sample)")
+    s.set_defaults(fn=cmd_blind_sample)
+
+    s = sub.add_parser("blind-import", help="put a filled-in blinded review sheet back into each run")
+    s.add_argument("--task", required=True)
+    s.add_argument("--file", required=True)
+    s.set_defaults(fn=cmd_blind_import)
 
     s = sub.add_parser("export-public", help="write non-personal, non-held-out answer-key rows to datasets/public/")
     s.set_defaults(fn=cmd_export_public)

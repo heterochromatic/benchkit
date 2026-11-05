@@ -49,3 +49,5 @@ Bench repos pin a tag. A frozen bench (tagged `v1.0-prereg`) never moves to a ne
 - Agent runs execute in a temp workspace outside the bench repo; transcript compliance check (`agent.compliance`, `bench compliance`) flags hosts outside `allowed_domains` and answer-key access; unreviewed flags fail `bench audit` and show in warnings. New manual field `compliance_reviewed`.
 - Held-out split (`scoring.holdout_ids`, salted), `bench export-public` (refuses emails and vendor names), canary in the run plan and exports.
 - Per-table usage can carry a balance reading; over 5% apart is a warning.
+- New operator profile `solo` for a single operator's illustrative walkthroughs (kept in its own summary rows).
+- `bench blind-sample` / `bench blind-import`: mixed, shuffled review sheets with the run (platform) hidden, for tasks with a `review` config.

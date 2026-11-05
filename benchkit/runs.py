@@ -9,7 +9,7 @@ from . import paths
 STATUSES = ["Pass", "Partial", "Fail", "Did not finish", "Not supported", "Not comparable", "Void"]
 FAILURE_CATEGORIES = ["task wording", "vendor gap", "setup", "operator error", "product friction"]
 ENV_LABELS = ["self-serve monthly", "self-serve annual", "quoted package", "free trial"]
-PROFILES = ["first-timer", "practitioner", "agent", "script"]
+PROFILES = ["first-timer", "practitioner", "solo", "agent", "script"]
 EXECUTORS = ["human", "agent", "script"]
 
 

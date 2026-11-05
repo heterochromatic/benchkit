@@ -13,7 +13,7 @@ REPO = Path(__file__).resolve().parents[1]
 FIXTURE = Path(__file__).resolve().parent / "fixture_bench"
 sys.path.insert(0, str(REPO))
 
-from benchkit import adapters, agent, artifacts, cli, costs, paths, runs, sanity, scoring, summary, verify  # noqa: E402
+from benchkit import adapters, agent, artifacts, cli, costs, paths, review, runs, sanity, scoring, summary, verify  # noqa: E402
 
 
 def write_csv(path, header, rows):
@@ -272,6 +272,26 @@ class BenchkitTest(unittest.TestCase):
         runs.set_usage(r["run_id"], before=1000, after=880, units={"data_credits": 100.0}, unit="data_credits")
         runs.record(r["run_id"], {}, status="Pass")
         self.assertTrue(any("differ by more than 5%" in w for w in summary.warnings_for(self.cfg, runs.all_runs())))
+
+    def test_blind_review_round_trip(self):
+        ids = []
+        for plat in ("clay", "acme"):
+            r = runs.new_run(self.cfg, "X1", plat, "human", "you", "solo", "self-serve monthly")
+            write_csv(runs.run_dir(r["run_id"]) / "output" / "output.csv", ["input_id", "email", "domain"],
+                      [["1", "a@example.com", "a.example.com"], ["2", "b@example.com", "b.example.com"], ["3", "", "c.example.com"]])
+            ids.append(r["run_id"])
+        sheet, n = review.blind_sample(self.cfg, "X1")
+        self.assertEqual(n, 4)
+        text = sheet.read_text()
+        self.assertNotIn("R000", text)
+        self.assertNotIn("clay", text.lower())
+        _, rows = scoring.read_csv(sheet)
+        filled = self.root / "filled.csv"
+        write_csv(filled, list(rows[0].keys()), [[*list(r.values())[:-1], "Y"] for r in rows])
+        counts = review.blind_import(self.cfg, "X1", filled)
+        self.assertEqual(counts, {ids[0]: 2, ids[1]: 2})
+        _, back = scoring.read_csv(runs.run_dir(ids[0]) / "review" / "sample.csv")
+        self.assertEqual({r["matches"] for r in back}, {"Y"})
 
     def test_check_anon_catches_names_and_emails(self):
         p = self.root / "leak.csv"
