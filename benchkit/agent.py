@@ -41,6 +41,7 @@ def _child_env(cfg, platform):
     for name, p in cfg["platforms"].items():
         if name != platform:
             blocked.update(p["credential_env"])
+    blocked -= set(cfg["platforms"][platform]["credential_env"])   # a key two platforms share stays
     for k in blocked:
         env.pop(k, None)
     return env

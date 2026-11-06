@@ -371,6 +371,8 @@ class BenchkitTest(unittest.TestCase):
             env = agent._child_env(self.cfg, "clay")
             self.assertIn("CLAY_API_KEY", env)
             self.assertNotIn("ACME_API_KEY", env)
+            shared = dict(self.cfg, platforms=dict(self.cfg["platforms"], clay_new=dict(self.cfg["platforms"]["clay"], label="Clay new")))
+            self.assertIn("CLAY_API_KEY", agent._child_env(shared, "clay"))
             lines = [json.dumps({"type": "assistant", "message": {"content": [{"type": "tool_use"}]}}),
                      json.dumps({"type": "result", "total_cost_usd": 0.5})]
             steps, res = agent.parse_stream(lines)
