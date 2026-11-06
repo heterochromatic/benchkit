@@ -152,7 +152,10 @@ def write_all(cfg):
                   "cost_per_1000_accepted_usd", "agent_cost_usd", "median_latency_ms"):
             rec[f"{k}_median"], rec[f"{k}_min"], rec[f"{k}_max"] = _stats(r[k] for r in ranked)
         ranked_ids = {r["run_id"] for r in ranked}
-        for k in cfg.get("summary_metrics", {}).get(task, []):
+        wanted = cfg.get("summary_metrics", {}).get(task, [])
+        keys = list(dict.fromkeys(k for w in wanted for k in ([w] if not w.endswith("*") else
+                                   sorted({m for i in ranked_ids for m in scores[i] if m.startswith(w[:-1])}))))
+        for k in keys:   # "prefix*" in the config expands to every scorer metric with that prefix
             rec[f"{k}_median"] = _stats(scores[i].get(k) for i in ranked_ids)[0]
         summary.append(rec)
 
