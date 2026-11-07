@@ -61,7 +61,7 @@ def cmd_verify(cfg, a):
     run = runs.load(a.run_id)
     emails, phones = scoring.output_contacts(run, cfg)
     ev = verify.verify_emails(emails, a.mode, cfg, a.email_results)
-    pv = verify.verify_phones(phones, a.phone_results) if phones else {}
+    pv = verify.verify_phones(phones, a.phone_results, a.phone_mode) if phones else {}
     out = runs.run_dir(a.run_id) / "verifier" / "results.json"
     out.write_text(json.dumps({"email": ev, "phone": pv}, indent=1), encoding="utf-8")
     ok = sum(s in cfg["verifier"]["accept_email_statuses"] for s in ev.values())
@@ -261,6 +261,7 @@ def build_parser():
     s.add_argument("--mode", choices=["import", "zerobounce", "cache"], required=True)
     s.add_argument("--email-results", help="verifier export CSV (import mode)")
     s.add_argument("--phone-results", help="line-type results CSV: phone,status")
+    s.add_argument("--phone-mode", choices=["twilio"], help="check phones with Twilio Lookup (line type)")
     s.set_defaults(fn=cmd_verify)
 
     s = sub.add_parser("score", help="run the task's acceptance test")

@@ -1,20 +1,23 @@
 """Shared independent verifier (methodology 5.1).
 
 Emails: ZeroBounce single-validate API, or an imported results file (e.g. a
-ZeroBounce bulk export). Phones: imported line-type results only, because the
-phone-check provider isn't chosen yet. Results are cached per address so the
-same email is never paid for twice across runs.
+ZeroBounce bulk export). Phones: Twilio Lookup's line type intelligence, or an
+imported results file. Results are cached per address or number, so the same one
+is never paid for twice across runs or benches.
 """
+import base64
 import csv
 import json
 import os
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 
 from . import paths
 
 ZB_URL = "https://api.zerobounce.net/v2/validate"
+TWILIO_URL = "https://lookups.twilio.com/v2/PhoneNumbers/{}?Fields=line_type_intelligence"
 EMAIL_COLS = ("email", "email address", "email_address")
 STATUS_COLS = ("status", "zb status", "zb_status")
 
@@ -103,10 +106,47 @@ def verify_emails(emails, mode, cfg, import_path=None, pause_s=0.2) -> dict:
     return {e: cache["email"][e] for e in wanted}
 
 
-def verify_phones(phones, import_path=None) -> dict:
+def e164(phone):
+    """+15551234567 form. shortcut: a number with no + and 10 digits is taken as North American, and
+    other numbers without a + get one; vendors almost always return international numbers with a +."""
+    d = _digits(phone)
+    digits = d.lstrip("+")
+    if d.startswith("+"):
+        return "+" + digits
+    if len(digits) == 10:
+        return "+1" + digits
+    return "+" + digits
+
+
+def twilio_line_type(phone, sid, secret, timeout=30) -> str:
+    """mobile, landline, fixedVoip, nonFixedVoip, tollFree, ... from Twilio Lookup; invalid if Twilio says so."""
+    req = urllib.request.Request(TWILIO_URL.format(urllib.parse.quote(e164(phone))))
+    req.add_header("Authorization", "Basic " + base64.b64encode(f"{sid}:{secret}".encode()).decode())
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return "invalid"
+        raise VerifyError(f"Twilio Lookup error {e.code}: {e.read()[:200]!r}")
+    if not data.get("valid"):
+        return "invalid"
+    return _norm((data.get("line_type_intelligence") or {}).get("type")) or "unknown"
+
+
+def verify_phones(phones, import_path=None, mode=None, pause_s=0.1) -> dict:
     cache = _load_cache()
+    wanted = sorted({_digits(p) for p in phones if _digits(p)})
     if import_path:
         cache["phone"].update(import_phone_results(import_path))
-        _save_cache(cache)
-    wanted = sorted({_digits(p) for p in phones if _digits(p)})
+    elif mode == "twilio":
+        sid, secret = os.environ.get("TWILIO_API_KEY_SID"), os.environ.get("TWILIO_API_KEY_SECRET")
+        if not (sid and secret):
+            raise VerifyError("Set TWILIO_API_KEY_SID and TWILIO_API_KEY_SECRET to check phones with Twilio")
+        for p in wanted:
+            if p not in cache["phone"]:
+                cache["phone"][p] = twilio_line_type(p, sid, secret)
+                _save_cache(cache)
+                time.sleep(pause_s)
+    _save_cache(cache)
     return {p: cache["phone"].get(p) for p in wanted}

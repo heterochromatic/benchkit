@@ -253,6 +253,23 @@ class BenchkitTest(unittest.TestCase):
         self.assertIn(("X1", "oracle", True, "all keyed metrics match"), rows)
         self.assertEqual(runs.all_runs(), [])   # nothing left in private/runs
 
+    def test_twilio_phone_check_caches_and_maps_line_types(self):
+        from unittest import mock
+        self.assertEqual((verify.e164("(415) 555-0100"), verify.e164("+44 20 7946 0000"), verify.e164("14155550100")),
+                         ("+14155550100", "+442079460000", "+14155550100"))
+        calls = []
+
+        def fake(phone, sid, secret, timeout=30):
+            calls.append(phone)
+            return {"+14155550100": "mobile", "4155550199": "landline"}.get(phone, "invalid")
+        with mock.patch.dict(os.environ, {"TWILIO_API_KEY_SID": "SKx", "TWILIO_API_KEY_SECRET": "s"}), \
+                mock.patch.object(verify, "twilio_line_type", side_effect=fake):
+            got = verify.verify_phones(["+1 415 555 0100", "415-555-0199", "+1 415 555 0100"], mode="twilio", pause_s=0)
+            again = verify.verify_phones(["+1 415 555 0100"], mode="twilio", pause_s=0)
+        self.assertEqual(got, {"+14155550100": "mobile", "4155550199": "landline"})
+        self.assertEqual(again, {"+14155550100": "mobile"})
+        self.assertEqual(len(calls), 2)   # the repeat and the second call came from the cache, not Twilio
+
     def test_holdout_and_public_export(self):
         ids = [str(i) for i in range(200)]
         held = scoring.holdout_ids(ids, self.cfg)

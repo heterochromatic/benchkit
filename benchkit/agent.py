@@ -18,6 +18,7 @@ def build_prompt(cfg, run) -> str:
     p = cfg["platforms"][run["platform"]]
     t = cfg["tasks"][run["task_id"]]
     fill = {
+        **{k: v for k, v in t.items() if isinstance(v, (str, int)) and k != "instruction"},   # e.g. {phone_rows}
         "platform_name": p["name"],
         "agent_interface": p["agent_interface"],
         "credential_env": ", ".join(p["credential_env"]),
