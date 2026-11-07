@@ -70,6 +70,18 @@ def _digits(v):
     return "".join(ch for ch in (v or "") if ch.isdigit() or ch == "+")
 
 
+def _retry(fn, *args, tries=4):
+    """Network calls to a verifier: a timeout or dropped connection is retried with backoff, never recorded
+    as a result, so one slow response can't stop a whole verification pass."""
+    for attempt in range(tries):
+        try:
+            return fn(*args)
+        except (TimeoutError, urllib.error.URLError, ConnectionError) as e:
+            if isinstance(e, urllib.error.HTTPError) or attempt == tries - 1:
+                raise
+            time.sleep(2 * (attempt + 1))
+
+
 def zerobounce_validate(email, api_key, timeout=30) -> str:
     q = urllib.parse.urlencode({"api_key": api_key, "email": email, "ip_address": ""})
     with urllib.request.urlopen(f"{ZB_URL}?{q}", timeout=timeout) as resp:
@@ -94,7 +106,7 @@ def verify_emails(emails, mode, cfg, import_path=None, pause_s=0.2) -> dict:
             raise VerifyError(f"Set {cfg['verifier']['email_api_env']} to use the ZeroBounce API")
         for e in wanted:
             if e not in cache["email"]:
-                cache["email"][e] = zerobounce_validate(e, key)
+                cache["email"][e] = _retry(zerobounce_validate, e, key)
                 _save_cache(cache)
                 time.sleep(pause_s)
     elif mode != "cache":
@@ -145,7 +157,7 @@ def verify_phones(phones, import_path=None, mode=None, pause_s=0.1) -> dict:
             raise VerifyError("Set TWILIO_API_KEY_SID and TWILIO_API_KEY_SECRET to check phones with Twilio")
         for p in wanted:
             if p not in cache["phone"]:
-                cache["phone"][p] = twilio_line_type(p, sid, secret)
+                cache["phone"][p] = _retry(twilio_line_type, p, sid, secret)
                 _save_cache(cache)
                 time.sleep(pause_s)
     _save_cache(cache)

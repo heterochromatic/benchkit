@@ -299,6 +299,21 @@ class BenchkitTest(unittest.TestCase):
         self.assertEqual(agent.read_balance(cfg), 1234.5)
         self.assertIsNone(agent.read_balance({"balance_command": [_s.executable, "-c", "print('not json')"]}))
 
+    def test_verifier_retries_timeouts(self):
+        from unittest import mock
+        calls = []
+
+        def flaky(e, k, timeout=30):
+            calls.append(e)
+            if len(calls) == 1:
+                raise TimeoutError("The read operation timed out")
+            return "valid"
+        with mock.patch.dict(os.environ, {"ZEROBOUNCE_API_KEY": "k"}), mock.patch.object(verify, "zerobounce_validate", side_effect=flaky), \
+                mock.patch.object(verify.time, "sleep"):
+            got = verify.verify_emails(["slow@example.com"], "zerobounce", self.cfg, pause_s=0)
+        self.assertEqual(got, {"slow@example.com": "valid"})
+        self.assertEqual(len(calls), 2)
+
     def test_holdout_and_public_export(self):
         ids = [str(i) for i in range(200)]
         held = scoring.holdout_ids(ids, self.cfg)
