@@ -314,6 +314,14 @@ class BenchkitTest(unittest.TestCase):
         self.assertEqual(got, {"slow@example.com": "valid"})
         self.assertEqual(len(calls), 2)
 
+    def test_twilio_line_type_error_is_not_a_result(self):
+        from unittest import mock
+        import io
+        body = json.dumps({"valid": True, "line_type_intelligence": {"type": None, "error_code": 60627}}).encode()
+        with mock.patch.object(verify.urllib.request, "urlopen", return_value=io.BytesIO(body)):
+            with self.assertRaises(verify.VerifyError):
+                verify.twilio_line_type("+14155550100", "SK", "s")
+
     def test_holdout_and_public_export(self):
         ids = [str(i) for i in range(200)]
         held = scoring.holdout_ids(ids, self.cfg)

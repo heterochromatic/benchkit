@@ -143,7 +143,11 @@ def twilio_line_type(phone, sid, secret, timeout=30) -> str:
         raise VerifyError(f"Twilio Lookup error {e.code}: {e.read()[:200]!r}")
     if not data.get("valid"):
         return "invalid"
-    return _norm((data.get("line_type_intelligence") or {}).get("type")) or "unknown"
+    lti = data.get("line_type_intelligence") or {}
+    if lti.get("error_code"):
+        # e.g. 60627 once a trial's credit runs out: the number wasn't checked, so stop rather than record "unknown"
+        raise VerifyError(f"Twilio line type unavailable (error {lti['error_code']}); check the Twilio balance, then rerun verify")
+    return _norm(lti.get("type")) or "unknown"
 
 
 def verify_phones(phones, import_path=None, mode=None, pause_s=0.1) -> dict:
