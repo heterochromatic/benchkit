@@ -52,3 +52,4 @@ Bench repos pin a tag. A frozen bench (tagged `v1.0-prereg`) never moves to a ne
 - New operator profile `solo` for a single operator's illustrative walkthroughs (kept in its own summary rows).
 - `bench blind-sample` / `bench blind-import`: mixed, shuffled review sheets with the run (platform) hidden, for tasks with a `review` config.
 - Phones (2026-11-06): `bench verify --phone-mode twilio` checks phones with Twilio Lookup (line type), cached per number; agent prompts fill any scalar task field (e.g. `{phone_rows}`).
+- CLI usage logger (2026-11-07): platforms with `cli_usage` get a wrapper on the agent's PATH that keeps every call's output; costs are summed from configured keys, the balance is read before and after the run, and `bench usage --from-cli` records it.

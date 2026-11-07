@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import tempfile
 import time
+from pathlib import Path
 
 from . import paths, runs
 from .adapters import REDACTED
@@ -122,6 +123,72 @@ def recheck(cfg, run_id):
     return run
 
 
+SEPARATOR = "### benchkit-cli-call ###"
+
+
+def cli_shim(command, log_path):
+    """A wrapper dir to put first on the agent's PATH: it runs the real `command` unchanged and appends a
+    copy of each call's output to log_path, so the platform's own per-call cost reports are kept whatever
+    the agent saves. shortcut: calls by absolute path or straight to the REST API aren't logged; the
+    balance reading catches that gap."""
+    real = shutil.which(command)
+    if not real:
+        return None
+    d = tempfile.mkdtemp(prefix="bench-shim-")
+    script = Path(d) / command
+    script.write_text(f"""#!/bin/bash
+set -o pipefail
+printf '%s\\n' '{SEPARATOR}' >> '{log_path}'
+'{real}' "$@" | tee -a '{log_path}'
+""", encoding="utf-8")
+    script.chmod(0o755)
+    return d
+
+
+def _dig(obj, dotted):
+    for part in dotted.split("."):
+        if not isinstance(obj, dict) or part not in obj:
+            return None
+        obj = obj[part]
+    return obj
+
+
+def cli_cost(text, cost_keys):
+    """Sum the cost fields of every logged call: {"total", "calls", "unparsed"}. A call's keys are looked
+    up at the top level and under "metadata" (where Clay's CLI reports credit usage)."""
+    total, calls, unparsed = 0.0, 0, 0
+    for chunk in text.split(SEPARATOR)[1:]:
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        calls += 1
+        try:
+            obj = json.loads(chunk)
+        except json.JSONDecodeError:
+            unparsed += "credit" in chunk.lower() and "Usage:" not in chunk   # help text carries no cost
+            continue
+        for key in cost_keys:
+            v = _dig(obj, key)
+            if v is None and isinstance(obj, dict):
+                v = _dig(obj.get("metadata") or {}, key)
+            if isinstance(v, (int, float)):
+                total += v
+    return {"total": round(total, 4), "calls": calls, "unparsed": unparsed}
+
+
+def read_balance(usage_cfg):
+    """The platform's credit balance from its CLI (e.g. `clay credits balance`), or None if unreadable."""
+    cmd = usage_cfg.get("balance_command")
+    if not cmd:
+        return None
+    try:
+        out = subprocess.run(cmd, capture_output=True, text=True, timeout=60).stdout
+        v = _dig(json.loads(out), usage_cfg.get("balance_path", "balance"))
+        return float(v) if isinstance(v, (int, float)) else None
+    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError):
+        return None
+
+
 def run_agent(cfg, run_id, dry_run=False) -> dict:
     run = runs.load(run_id)
     if run["executor"] != "agent":
@@ -144,12 +211,21 @@ def run_agent(cfg, run_id, dry_run=False) -> dict:
 
     env = _child_env(cfg, run["platform"])
     secrets = [os.environ.get(k) for k in cfg["platforms"][run["platform"]]["credential_env"]]
+    usage_cfg = cfg["platforms"][run["platform"]].get("cli_usage")
+    shim_dir = cli_log = None
+    if usage_cfg:
+        cli_log = Path(tempfile.mkdtemp(prefix="bench-cli-log-")) / f"{usage_cfg['command']}.log"
+        cli_log.touch()
+        shim_dir = cli_shim(usage_cfg["command"], cli_log)
+        if shim_dir:
+            env["PATH"] = shim_dir + os.pathsep + env.get("PATH", "")
     # shortcut: a temp folder blocks relative paths to the answer keys, not an absolute-path search;
     # the compliance check flags that, and a container (TPC sim / Harbor) closes it fully.
     ws = tempfile.mkdtemp(prefix="bench-agent-")
     shutil.copytree(d / "input", f"{ws}/input")
     for sub in ("output", "work"):
         os.makedirs(f"{ws}/{sub}", exist_ok=True)
+    balance_before = read_balance(usage_cfg) if usage_cfg else None
     runs.start(run_id)
     timed_out = False
     t0 = time.monotonic()
@@ -168,7 +244,21 @@ def run_agent(cfg, run_id, dry_run=False) -> dict:
             shutil.rmtree(d / sub, ignore_errors=True)
             shutil.copytree(f"{ws}/{sub}", d / sub)
         shutil.rmtree(ws, ignore_errors=True)
+        if shim_dir:
+            shutil.rmtree(shim_dir, ignore_errors=True)
     elapsed = round((time.monotonic() - t0) / 60, 2)
+    cli_usage = None
+    if cli_log and cli_log.exists():
+        log = redact(cli_log.read_text(encoding="utf-8", errors="replace"), secrets)
+        (d / "usage").mkdir(exist_ok=True)
+        (d / "usage" / cli_log.name).write_text(log, encoding="utf-8")
+        cli_usage = {**cli_cost(log, usage_cfg["cost_keys"]), "unit": usage_cfg.get("unit", "credits")}
+        shutil.rmtree(cli_log.parent, ignore_errors=True)
+    if usage_cfg and balance_before is not None:
+        time.sleep(usage_cfg.get("balance_settle_s", 60))   # charges post a little after the work finishes
+        after = read_balance(usage_cfg)
+        cli_usage = {**(cli_usage or {}), "balance_before": balance_before, "balance_after": after,
+                     "balance_drop": None if after is None else round(balance_before - after, 4)}
 
     (d / "transcript" / "stream.jsonl").write_text(redact(out, secrets), encoding="utf-8")
     (d / "transcript" / "stderr.txt").write_text(redact(err, secrets), encoding="utf-8")
@@ -191,6 +281,7 @@ def run_agent(cfg, run_id, dry_run=False) -> dict:
         "is_error": result.get("is_error"), "duration_ms": result.get("duration_ms"),
         "not_supported_note": (d / "output" / "not_supported.md").exists(),
         "compliance": compliance(cfg, run["platform"], out.splitlines()),
+        "cli_usage": cli_usage,
     }
     if timed_out:
         run["status"], run["status_source"] = "Did not finish", "agent-timeout"

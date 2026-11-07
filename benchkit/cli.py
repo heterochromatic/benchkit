@@ -45,7 +45,23 @@ def cmd_stop(cfg, a):
 
 
 def cmd_usage(cfg, a):
-    r = runs.set_usage(a.run_id, a.before, a.after, _units(a.units), unit=a.unit)
+    units = _units(a.units)
+    if a.from_cli:
+        cu = (runs.load(a.run_id).get("agent") or {}).get("cli_usage")
+        if not cu:
+            raise runs.RunError(f"{a.run_id} has no logged CLI usage (the platform needs cli_usage in its config)")
+        if cu["unparsed"]:
+            print(f"warning: {cu['unparsed']} of {cu['calls']} logged calls had no readable cost; check usage/ in the run folder",
+                  file=sys.stderr)
+        # The balance drop is the cost (per-call reports miss routine runs); the logged calls are a floor check.
+        cost = cu["balance_drop"] if cu.get("balance_drop") is not None else cu["total"]
+        if cu.get("balance_drop") is not None and cu["total"] > cu["balance_drop"] * 1.05:
+            print(f"warning: the CLI reported {cu['total']} but the balance fell only {cu['balance_drop']}; another "
+                  f"workspace user or a late charge may have moved it, so check before scoring", file=sys.stderr)
+        units = {cu["unit"]: cost}
+        a.before = a.before if a.before is not None else cu.get("balance_before")
+        a.after = a.after if a.after is not None else cu.get("balance_after")
+    r = runs.set_usage(a.run_id, a.before, a.after, units, unit=a.unit)
     print(f"{r['run_id']} usage {r['usage_units']}")
 
 
@@ -247,6 +263,7 @@ def build_parser():
     s.add_argument("--after", type=float)
     s.add_argument("--unit", help="unit name for balance readings (default credits)")
     s.add_argument("--units", nargs="*")
+    s.add_argument("--from-cli", action="store_true", help="use the per-call costs the platform's CLI reported during an agent run")
     s.set_defaults(fn=cmd_usage)
 
     s = sub.add_parser("record", help="record values from the recording, counters, costs, status")

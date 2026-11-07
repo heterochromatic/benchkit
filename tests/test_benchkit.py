@@ -270,6 +270,26 @@ class BenchkitTest(unittest.TestCase):
         self.assertEqual(again, {"+14155550100": "mobile"})
         self.assertEqual(len(calls), 2)   # the repeat and the second call came from the cache, not Twilio
 
+    def test_cli_usage_logger_keeps_output_exit_code_and_costs(self):
+        import subprocess
+        log = self.root / "echo.log"; log.touch()
+        d = agent.cli_shim("echo", log)
+        r = subprocess.run([f"{d}/echo", '{"metadata": {"upfrontCreditUsage": {"totalCost": 20}, "additionalCreditUsage": {"totalCost": -5}}}'],
+                           capture_output=True, text=True)
+        subprocess.run([f"{d}/echo", "Usage: clay credits ... Work with workspace credits."], capture_output=True)
+        self.assertEqual(r.returncode, 0)
+        self.assertIn("totalCost", r.stdout)   # the agent sees the real output unchanged
+        got = agent.cli_cost(log.read_text(), ["upfrontCreditUsage.totalCost", "additionalCreditUsage.totalCost"])
+        self.assertEqual(got, {"total": 15.0, "calls": 2, "unparsed": 0})   # a refund counts; help text isn't a miss
+        log2 = self.root / "false.log"; log2.touch()
+        self.assertEqual(subprocess.run([f"{agent.cli_shim('false', log2)}/false"]).returncode, 1)   # failures pass through
+
+    def test_read_balance_from_cli(self):
+        import sys as _s
+        cfg = {"balance_command": [_s.executable, "-c", "print('{\"balance\": 1234.5}')"], "balance_path": "balance"}
+        self.assertEqual(agent.read_balance(cfg), 1234.5)
+        self.assertIsNone(agent.read_balance({"balance_command": [_s.executable, "-c", "print('not json')"]}))
+
     def test_holdout_and_public_export(self):
         ids = [str(i) for i in range(200)]
         held = scoring.holdout_ids(ids, self.cfg)
