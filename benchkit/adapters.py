@@ -217,6 +217,11 @@ def run_endpoint(cfg, run_id, limit=0, log=print):
             run["status"], run["status_source"] = "Void", "smoke-test"
             run["manual"]["failure_category"] = "setup"
             run["manual"]["notes"] = f"smoke test on the first {limit} rows"
+        elif run.get("status_source") == "smoke-test":
+            # A partial run resumed to the full input is a real run again (e.g. stopped to check spend).
+            run["status"], run["status_source"] = None, None
+            run["manual"].pop("failure_category", None)
+            run["manual"]["notes"] = "completed after a partial first pass"
         runs.save(run)
         log(f"{run_id}: output/output.csv written ({len(rows)} rows, {len(ok)} successful requests)")
     return runs.load(run_id)

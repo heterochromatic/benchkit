@@ -168,6 +168,15 @@ class BenchkitTest(unittest.TestCase):
         adapters.run_endpoint(self.cfg, b["run_id"], log=lambda m: None)
         self.assertEqual(fake.started, ["2", "3"])
 
+    def test_partial_run_resumed_in_full_is_no_longer_void(self):
+        cli.main(["run", "--task", "X1", "--env", "self-serve monthly", "--endpoints", "fake_acme_match", "--limit", "1"])
+        rid = runs.all_runs()[0]["run_id"]
+        self.assertEqual(runs.load(rid)["status"], "Void")
+        cli.main(["run", "--resume", rid])
+        r = runs.load(rid)
+        self.assertIsNone(r["status"])
+        self.assertEqual(r["script"]["cells"], 3)
+
     def test_stoprun_halts_and_resumes(self):
         acme = type(adapters.registry()["fake_acme_match"])
         acme.stop_at = "2"
