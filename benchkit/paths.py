@@ -67,6 +67,18 @@ def verifier_cache() -> Path:
     return Path(os.environ.get("BENCH_VERIFIER_CACHE") or private() / "verifier-cache.json")
 
 
+def env_file_keys() -> set:
+    """Names of every variable in the bench repo's .env (its secrets), whether or not they're set."""
+    try:
+        f = repo() / ".env"
+    except PathError:
+        return set()
+    if not f.exists():
+        return set()
+    return {ln.partition("=")[0].strip() for ln in f.read_text(encoding="utf-8").splitlines()
+            if "=" in ln and not ln.strip().startswith("#")}
+
+
 def load_env():
     """Read KEY=VALUE lines from the bench repo's .env (gitignored). Existing variables win."""
     try:

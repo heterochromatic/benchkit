@@ -37,9 +37,11 @@ def build_prompt(cfg, run) -> str:
 
 
 def _child_env(cfg, platform):
-    """Pass only this platform's credentials; strip every other platform's and the verifier key."""
+    """Pass only this platform's credentials; strip every other secret: other platforms' keys, the verifier
+    key, and anything else in the repo's .env (e.g. the CRM sandbox token, which the agent must reach
+    through the platform, not directly)."""
     env = dict(os.environ)
-    blocked = {cfg["verifier"]["email_api_env"]}
+    blocked = {cfg["verifier"]["email_api_env"]} | paths.env_file_keys()
     for name, p in cfg["platforms"].items():
         if name != platform:
             blocked.update(p["credential_env"])
@@ -202,6 +204,7 @@ def run_agent(cfg, run_id, dry_run=False) -> dict:
         "--output-format", "stream-json", "--verbose",
         "--model", a["model"],
         "--allowedTools", *a["allowed_tools"],
+        "--disallowedTools", "WebFetch", "WebSearch",
         "--max-budget-usd", str(a["max_budget_usd"]),
         "--no-session-persistence", "--strict-mcp-config",
         "--setting-sources", "project",

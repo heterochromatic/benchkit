@@ -325,6 +325,18 @@ class BenchkitTest(unittest.TestCase):
         with mock.patch.object(verify.urllib.request, "urlopen", return_value=io.BytesIO(body)):
             self.assertEqual(verify.twilio_line_type("+14155550100", "SK", "s"), "unavailable-60600")   # per number: recorded
 
+    def test_agent_env_strips_every_other_secret(self):
+        from unittest import mock
+        plat = next(iter(self.cfg["platforms"]))
+        with mock.patch.object(paths, "env_file_keys", return_value={"HUBSPOT_ACCESS_TOKEN", "TWILIO_API_KEY_SECRET"}), \
+                mock.patch.dict(os.environ, {"HUBSPOT_ACCESS_TOKEN": "pat-x", "TWILIO_API_KEY_SECRET": "s"}):
+            env = agent._child_env(self.cfg, plat)
+        self.assertNotIn("HUBSPOT_ACCESS_TOKEN", env)   # a CRM token must be reached through the platform, not directly
+        self.assertNotIn("TWILIO_API_KEY_SECRET", env)
+        run = runs.new_run(self.cfg, "X1", plat, "agent", "a", "agent", "self-serve monthly")
+        cmd = agent.run_agent(self.cfg, run["run_id"], dry_run=True)["cmd"]
+        self.assertEqual(cmd[cmd.index("--disallowedTools") + 1:cmd.index("--disallowedTools") + 3], ["WebFetch", "WebSearch"])
+
     def test_holdout_and_public_export(self):
         ids = [str(i) for i in range(200)]
         held = scoring.holdout_ids(ids, self.cfg)
