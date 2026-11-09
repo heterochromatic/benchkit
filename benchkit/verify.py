@@ -17,6 +17,7 @@ import urllib.request
 from . import paths
 
 ZB_URL = "https://api.zerobounce.net/v2/validate"
+ACCOUNT_ERRORS = {60606, 60627}   # Twilio Lookup: package disabled; trial or account out of credit
 TWILIO_URL = "https://lookups.twilio.com/v2/PhoneNumbers/{}?Fields=line_type_intelligence"
 EMAIL_COLS = ("email", "email address", "email_address")
 STATUS_COLS = ("status", "zb status", "zb_status")
@@ -144,9 +145,12 @@ def twilio_line_type(phone, sid, secret, timeout=30) -> str:
     if not data.get("valid"):
         return "invalid"
     lti = data.get("line_type_intelligence") or {}
-    if lti.get("error_code"):
-        # e.g. 60627 once a trial's credit runs out: the number wasn't checked, so stop rather than record "unknown"
-        raise VerifyError(f"Twilio line type unavailable (error {lti['error_code']}); check the Twilio balance, then rerun verify")
+    code = lti.get("error_code")
+    if code in ACCOUNT_ERRORS:
+        # the account can't run the check (e.g. a trial out of credit): nothing was checked, so stop
+        raise VerifyError(f"Twilio line type unavailable (error {code}); check the Twilio account, then rerun verify")
+    if code:
+        return f"unavailable-{code}"   # about this number (e.g. 60600 out of coverage): checked, not a valid mobile
     return _norm(lti.get("type")) or "unknown"
 
 

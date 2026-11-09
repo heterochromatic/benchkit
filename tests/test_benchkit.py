@@ -321,6 +321,9 @@ class BenchkitTest(unittest.TestCase):
         with mock.patch.object(verify.urllib.request, "urlopen", return_value=io.BytesIO(body)):
             with self.assertRaises(verify.VerifyError):
                 verify.twilio_line_type("+14155550100", "SK", "s")
+        body = json.dumps({"valid": True, "line_type_intelligence": {"type": None, "error_code": 60600}}).encode()
+        with mock.patch.object(verify.urllib.request, "urlopen", return_value=io.BytesIO(body)):
+            self.assertEqual(verify.twilio_line_type("+14155550100", "SK", "s"), "unavailable-60600")   # per number: recorded
 
     def test_holdout_and_public_export(self):
         ids = [str(i) for i in range(200)]
