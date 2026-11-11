@@ -81,8 +81,14 @@ class BenchkitTest(unittest.TestCase):
         self.assertEqual(adapters.registry()["fake_acme_match"].calls, calls)
         for r in runs.all_runs():
             runs.record(r["run_id"], {}, status="Not comparable")
+        (runs.run_dir(acme["run_id"]) / "work").mkdir(exist_ok=True)
+        (runs.run_dir(acme["run_id"]) / "work" / "acmedata_notes.py").write_text("x = 1")
         cli.main(["manifest"])
         self.assertEqual(artifacts.audit(self.cfg), [])
+        self.assertNotIn("acmedata_notes", (paths.results() / "manifest.json").read_text())  # names never published
+        (runs.run_dir(acme["run_id"]) / "work" / "acmedata_notes.py").unlink()
+        self.assertTrue(any("missing" in e for e in artifacts.audit(self.cfg)))
+        (runs.run_dir(acme["run_id"]) / "work" / "acmedata_notes.py").write_text("x = 1")
         (runs.run_dir(acme["run_id"]) / "cells" / "1.json").write_text("{}")
         self.assertTrue(any("hash mismatch" in e for e in artifacts.audit(self.cfg)))
         p = runs.run_dir(acme["run_id"]) / "audit" / "2.json"
@@ -373,6 +379,9 @@ class BenchkitTest(unittest.TestCase):
         self.assertNotIn("R000", text)
         self.assertNotIn("clay", text.lower())
         _, rows = scoring.read_csv(sheet)
+        key = json.loads(sheet.with_name("X1-blind-key.json").read_text())
+        per_run = {i: {r["domain"] for r in rows if key[r["item_id"]] == i} for i in ids}
+        self.assertEqual(per_run[ids[0]], per_run[ids[1]])  # same inputs -> same accounts reviewed
         filled = self.root / "filled.csv"
         write_csv(filled, list(rows[0].keys()), [[*list(r.values())[:-1], "Y"] for r in rows])
         counts = review.blind_import(self.cfg, "X1", filled)

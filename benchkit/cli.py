@@ -4,6 +4,7 @@ import csv
 import hashlib
 import json
 import sys
+from pathlib import Path
 
 from . import adapters, agent, artifacts, paths, review, runs, sanity, scoring, summary, verify
 
@@ -340,7 +341,7 @@ def build_parser():
 
     s = sub.add_parser("blind-import", help="put a filled-in blinded review sheet back into each run")
     s.add_argument("--task", required=True)
-    s.add_argument("--file", required=True)
+    s.add_argument("--file", required=True, type=Path)
     s.set_defaults(fn=cmd_blind_import)
 
     s = sub.add_parser("export-public", help="write non-personal, non-held-out answer-key rows to datasets/public/")

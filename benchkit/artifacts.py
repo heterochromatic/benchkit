@@ -8,6 +8,7 @@
   credential survived redaction, and that published results are clean.
 """
 import csv
+import hashlib
 import json
 import os
 from datetime import datetime, timezone
@@ -77,11 +78,17 @@ def export_public(cfg):
     return written
 
 
+def _run_files(d):
+    """{key: file}. Keys hash the relative path: agents name scratch files after vendors, and the manifest is published."""
+    return {"path-" + hashlib.sha256(str(f.relative_to(d)).encode()).hexdigest()[:16]: f
+            for f in sorted(d.rglob("*")) if f.is_file()}
+
+
 def build_manifest(cfg):
     entries = []
     for r in runs.all_runs():
         d = runs.run_dir(r["run_id"])
-        files = {str(f.relative_to(d)): runs.sha256(f) for f in sorted(d.rglob("*")) if f.is_file()}
+        files = {k: runs.sha256(f) for k, f in _run_files(d).items()}
         entries.append({"run_id": r["run_id"], "task_version": r["task_version"], "platform": r["platform_label"],
                         "status": summary.final_status(r), "files": files})
     manifest = {"built_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -121,10 +128,10 @@ def audit(cfg):
     for rid in sorted(on_disk ^ listed):
         errors.append(f"{rid}: {'not in manifest' if rid in on_disk else 'in manifest but missing on disk'}")
     for e in manifest["runs"]:
-        d = runs.run_dir(e["run_id"])
+        on_disk_files = _run_files(runs.run_dir(e["run_id"]))
         for rel, h in e["files"].items():
-            f = d / rel
-            if not f.is_file():
+            f = on_disk_files.get(rel)
+            if f is None:
                 errors.append(f"{e['run_id']}: missing {rel}")
             elif runs.sha256(f) != h:
                 errors.append(f"{e['run_id']}: hash mismatch {rel}")

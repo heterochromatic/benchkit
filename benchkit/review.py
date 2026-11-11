@@ -25,15 +25,22 @@ def blind_sample(cfg, task, n=None):
     if not rv:
         raise runs.RunError(f"{task} has no review settings in the config")
     n = n or rv["sample"]
-    items, header = [], None
+    items, header, outs = [], None, []
     for r in runs.all_runs():
         out = runs.run_dir(r["run_id"]) / "output" / "output.csv"
         if r["task_id"] != task or summary.final_status(r) == "Void" or not out.exists():
             continue
         h, rows = read_csv(out)
         header = header or h
-        for row in random.Random(r["run_id"]).sample(rows, min(n, len(rows))):
-            items.append((r["run_id"], row))
+        outs.append((r["run_id"], rows))
+    # Same inputs (every run covers the same domains): review the same accounts on every platform.
+    doms = [{row.get("domain") for row in rows} for _, rows in outs]
+    shared = sorted(doms[0]) if doms and "domain" in (header or []) and all(d == doms[0] for d in doms) else None
+    picked = set(random.Random(task).sample(shared, min(n, len(shared)))) if shared else None
+    for run_id, rows in outs:
+        chosen = [row for row in rows if row["domain"] in picked] if picked else \
+            random.Random(run_id).sample(rows, min(n, len(rows)))
+        items.extend((run_id, row) for row in chosen)
     if not items:
         raise runs.RunError(f"No {task} outputs to sample")
     random.Random(secrets.randbits(64)).shuffle(items)
