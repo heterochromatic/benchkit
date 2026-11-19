@@ -2,6 +2,12 @@
 
 Bench repos pin a tag. A frozen bench (tagged `v1.0-prereg`) never moves to a newer benchkit tag mid-run.
 
+## v0.1.2 (2026-11-18)
+
+- `blind-sample` puts a sheet ID in every item ID, so a filled sheet from an earlier sampling is refused on import instead of being remapped to other runs.
+- Agent runs also withhold every secret named in the bench repo's `.env.example`, not only those in `.env`, so a key exported in the shell profile never reaches the agent.
+- Tests for both.
+
 ## v0.1.1 (2026-11-18)
 
 - Scripted runs: a smoke test resumed in full now re-measures balance usage and the stop time over the whole run (v0.1.0 kept the smoke test's). After a `StopRun` (e.g. out of credits), automatic balance usage is skipped and the operator records it with `bench usage --before/--after`, because a top-up can fall between the readings. Two tests added. Agent runs and scoring are unchanged.

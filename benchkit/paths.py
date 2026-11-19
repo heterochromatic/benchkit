@@ -68,14 +68,13 @@ def verifier_cache() -> Path:
 
 
 def env_file_keys() -> set:
-    """Names of every variable in the bench repo's .env (its secrets), whether or not they're set."""
+    """Names of every variable in the bench repo's .env and .env.example (its secrets), whether or not they're set.
+    .env.example covers a secret exported in the shell profile but never written to .env."""
     try:
-        f = repo() / ".env"
+        files = [repo() / ".env", repo() / ".env.example"]
     except PathError:
         return set()
-    if not f.exists():
-        return set()
-    return {ln.partition("=")[0].strip() for ln in f.read_text(encoding="utf-8").splitlines()
+    return {ln.partition("=")[0].strip() for f in files if f.exists() for ln in f.read_text(encoding="utf-8").splitlines()
             if "=" in ln and not ln.strip().startswith("#")}
 
 

@@ -47,11 +47,12 @@ def blind_sample(cfg, task, n=None):
     sheet, keyfile = _sheet(task)
     sheet.parent.mkdir(parents=True, exist_ok=True)
     key = {}
+    sheet_id = secrets.token_hex(3)   # in every item id, so a sheet from an earlier sampling can't import against this key
     with open(sheet, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["item_id", *header, *rv["columns"]])
         for i, (run_id, row) in enumerate(items, 1):
-            item = f"I{i:04d}"
+            item = f"{sheet_id}-I{i:04d}"
             key[item] = run_id
             w.writerow([item, *[row.get(c, "") for c in header], *[""] * len(rv["columns"])])
     paths.write_json(keyfile, key)

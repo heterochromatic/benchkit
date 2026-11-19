@@ -113,6 +113,14 @@ class BenchkitTest(unittest.TestCase):
         r = runs.all_runs()[0]
         self.assertEqual((r["status"], r["manual"]["failure_category"]), ("Void", "setup"))
 
+    def test_env_example_names_count_as_secrets(self):
+        envf = self.root / "repo2"
+        (envf / "config").mkdir(parents=True)
+        (envf / "config" / "bench.json").write_text("{}")
+        (envf / ".env.example").write_text("# keys\nCRM_TOKEN=\n# AGENT_KEY=\n")
+        os.environ["BENCH_REPO"] = str(envf)
+        self.assertEqual(paths.env_file_keys(), {"CRM_TOKEN"})   # listed secret blocked; commented-out name is not
+
     def test_env_file_does_not_override(self):
         envf = self.root / "repo"
         (envf / "config").mkdir(parents=True)
@@ -415,6 +423,10 @@ class BenchkitTest(unittest.TestCase):
         self.assertEqual(counts, {ids[0]: 2, ids[1]: 2})
         _, back = scoring.read_csv(runs.run_dir(ids[0]) / "review" / "sample.csv")
         self.assertEqual({r["matches"] for r in back}, {"Y"})
+        # Sampling again replaces the key: the earlier, filled sheet must be refused, not remapped to other runs.
+        review.blind_sample(self.cfg, "X1")
+        with self.assertRaises(scoring.ScoreError):
+            review.blind_import(self.cfg, "X1", filled)
 
     def test_check_anon_catches_names_and_emails(self):
         p = self.root / "leak.csv"
