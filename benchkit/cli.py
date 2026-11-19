@@ -160,10 +160,8 @@ def cmd_run(cfg, a):
 
 
 def cmd_freeze(cfg, a):
-    plan, missing = artifacts.freeze(cfg)
+    plan = artifacts.freeze(cfg)
     print(f"results/run-plan.json written (config {plan['config_sha256'][:12]})")
-    for t in missing:
-        print(f"WARNING {t}: dataset missing, so its checksum isn't frozen yet")
 
 
 def cmd_manifest(cfg, a):
@@ -264,7 +262,7 @@ def build_parser():
     s.add_argument("--after", type=float)
     s.add_argument("--unit", help="unit name for balance readings (default credits)")
     s.add_argument("--units", nargs="*")
-    s.add_argument("--from-cli", action="store_true", help="use the per-call costs the platform's CLI reported during an agent run")
+    s.add_argument("--from-cli", action="store_true", help="use the balance drop logged during an agent run (the CLI's per-call costs when no balance was read)")
     s.set_defaults(fn=cmd_usage)
 
     s = sub.add_parser("record", help="record values from the recording, counters, costs, status")
@@ -322,7 +320,7 @@ def build_parser():
     s.add_argument("--resume", metavar="RUN_ID", help="continue a run without re-calling finished rows")
     s.set_defaults(fn=cmd_run)
 
-    s = sub.add_parser("freeze", help="write results/run-plan.json; later config changes are refused")
+    s = sub.add_parser("freeze", help="write results/run-plan.json (never overwrites one); later config changes are refused")
     s.set_defaults(fn=cmd_freeze)
 
     s = sub.add_parser("manifest", help="write results/manifest.json with a SHA-256 for every run file")

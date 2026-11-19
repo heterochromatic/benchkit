@@ -101,10 +101,6 @@ def output_contacts(run, cfg):
     return plugin().output_contacts(run, cfg)
 
 
-# A verifier says an address is deliverable, not that it belongs to the right person. Two checks
-# close that gap: the email must be on the company's domain, and on a gold subset with a
-# known-correct email (listed publicly on the company's site) it must be that exact address.
-
 def email_domain(email):
     e = (email or "").strip().lower()
     return e.rpartition("@")[2] if "@" in e else ""

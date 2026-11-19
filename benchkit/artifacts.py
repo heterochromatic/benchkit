@@ -1,7 +1,8 @@
 """Run plan, manifest and audit.
 
 - `bench freeze` writes results/run-plan.json: config hash, dataset checksums, task versions,
-  price date, benchkit version. Runs are refused if the config changes afterwards.
+  price date, benchkit version. Runs are refused if the config changes afterwards. It refuses
+  to overwrite an existing run plan, and fails if a dataset is missing.
 - `bench manifest` writes results/manifest.json: SHA-256 of every file in every run folder.
   Hashes are published; the files stay private, so an auditor given access can confirm nothing changed.
 - `bench audit` checks the manifest against the files, that every run has a status, that no
@@ -34,11 +35,15 @@ def freeze(cfg):
     undecided = prereg_missing(cfg)
     if undecided:
         raise runs.RunError(f"Can't freeze: still undecided in the config: {', '.join(undecided)}")
-    tasks = {}
-    for tid, t in cfg["tasks"].items():
-        src = paths.datasets() / t["input"]
-        tasks[tid] = {"version": t["version"], "input": t["input"],
-                      "input_sha256": runs.sha256(src) if src.exists() else None}
+    out = paths.results() / "run-plan.json"
+    if out.exists():
+        raise runs.RunError("Can't freeze: results/run-plan.json already exists and won't be overwritten. "
+                            "To re-freeze, log the change in CHANGELOG.md and delete that file first")
+    missing = [f"{tid} ({t['input']})" for tid, t in cfg["tasks"].items() if not (paths.datasets() / t["input"]).exists()]
+    if missing:
+        raise runs.RunError(f"Can't freeze: dataset missing for {', '.join(missing)}")
+    tasks = {tid: {"version": t["version"], "input": t["input"], "input_sha256": runs.sha256(paths.datasets() / t["input"])}
+             for tid, t in cfg["tasks"].items()}
     plan = {
         "title": cfg.get("title"), "methodology_version": cfg.get("methodology_version"),
         "frozen_at": runs.now(), "benchkit_version": __version__,
@@ -50,11 +55,9 @@ def freeze(cfg):
         "platforms": sorted({p["label"] for p in cfg["platforms"].values()}),  # labels only: keys can name vendors
         "tasks": tasks,
     }
-    missing = [tid for tid, t in tasks.items() if t["input_sha256"] is None]
-    out = paths.results() / "run-plan.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(plan, indent=2) + "\n", encoding="utf-8")
-    return plan, missing
+    return plan
 
 
 def export_public(cfg):
@@ -148,7 +151,7 @@ def audit(cfg):
                 try:
                     errors += _unredacted(json.loads(text), f"{r['run_id']}/{f.relative_to(d)}")
                 except json.JSONDecodeError:
-                    pass
+                    errors.append(f"{r['run_id']}: {f.relative_to(d)} is not valid JSON, so its redaction can't be checked")
     for r in runs.all_runs():
         comp = (r.get("agent") or {}).get("compliance")
         if comp and not comp["ok"] and r["manual"].get("compliance_reviewed") != "yes" and summary.final_status(r) != "Void":

@@ -1,4 +1,4 @@
-"""Pricing views from methodology 5.4 and 7."""
+"""Pricing views from the methodology: cost per run and fully loaded monthly cost."""
 import statistics
 
 

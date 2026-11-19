@@ -95,6 +95,8 @@ class BenchkitTest(unittest.TestCase):
         p.write_text('{"request": {"headers": {"x-api-key": "live-key-123456"}}, "response": {"body": {"next_page_token": "abc"}}}')
         errs = [e for e in artifacts.audit(self.cfg) if "unredacted" in e]
         self.assertEqual(len(errs), 1)
+        p.write_text('{"request": ')   # a cut-off audit file is reported, not skipped
+        self.assertTrue(any("not valid JSON" in e for e in artifacts.audit(self.cfg)))
 
     def test_freeze_refuses_changed_config(self):
         cfg_copy = self.root / "cfg.json"
@@ -270,6 +272,19 @@ class BenchkitTest(unittest.TestCase):
             artifacts.freeze(cfg)
         self.assertIn("disclosures.control_provider", str(e.exception))
         self.assertNotIn("scenario.users", str(e.exception))
+
+    def test_freeze_refuses_overwrite_and_missing_dataset(self):
+        (paths.datasets() / "x1-input.csv").rename(paths.datasets() / "moved.csv")
+        with self.assertRaises(runs.RunError) as e:
+            artifacts.freeze(self.cfg)
+        self.assertIn("dataset missing for X1", str(e.exception))
+        self.assertFalse((paths.results() / "run-plan.json").exists())
+        (paths.datasets() / "moved.csv").rename(paths.datasets() / "x1-input.csv")
+        frozen_at = artifacts.freeze(self.cfg)["frozen_at"]
+        with self.assertRaises(runs.RunError) as e:
+            artifacts.freeze(self.cfg)
+        self.assertIn("already exists", str(e.exception))
+        self.assertEqual(json.loads((paths.results() / "run-plan.json").read_text())["frozen_at"], frozen_at)
 
     def test_agent_runs_outside_repo_and_compliance_flags(self):
         script = self.root / "fake-claude"

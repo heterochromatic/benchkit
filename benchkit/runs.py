@@ -79,7 +79,7 @@ def new_run(cfg, task, platform, executor, operator, profile, env_label, order=N
         raise RunError(f"environment label must be one of {ENV_LABELS}")
     pcfg = cfg["platforms"][platform]
     if cost_only and not pcfg.get("parallel_cost_runs"):
-        raise RunError(f"{pcfg['name']} usage is read from the balance; cost-only parallel runs aren't allowed (methodology 5.9)")
+        raise RunError(f"{pcfg['name']} usage is read from the balance; cost-only parallel runs aren't allowed")
 
     tcfg = cfg["tasks"][task]
     src = paths.datasets() / tcfg["input"]
@@ -88,7 +88,7 @@ def new_run(cfg, task, platform, executor, operator, profile, env_label, order=N
     checksum = sha256(src)
     for other in all_runs():
         if other["task_id"] == task and other["task_version"] == tcfg["version"] and other["input_checksum"] != checksum:
-            raise RunError(f"Input for {task} differs from run {other['run_id']} (checksum mismatch, methodology 5.2)")
+            raise RunError(f"Input for {task} differs from run {other['run_id']} (checksum mismatch)")
 
     run_id = _next_id()
     d = run_dir(run_id)
@@ -160,7 +160,7 @@ def start(run_id) -> dict:
                 f.write(run_id)
         except FileExistsError:
             holder = lp.read_text().strip()
-            raise RunError(f"Timed run {holder} is still active on {run['platform']}; timed runs can't overlap (methodology 5.7)") from None
+            raise RunError(f"Timed run {holder} is still active on {run['platform']}; timed runs can't overlap") from None
     run["started_at"] = now()
     save(run)
     return run

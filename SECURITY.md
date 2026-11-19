@@ -25,4 +25,4 @@ Only the latest commit on `main` and the most recent release tag are supported.
 
 - Credentials live only in a local `.env` file, which is gitignored. `.env.example` lists the names, never values.
 - `bench audit` fails if any credential survives redaction in a run file.
-- Secret scanning and push protection should be turned on for this repository in its GitHub settings.
+- CI runs gitleaks on every push; GitHub secret scanning and push protection are turned on when the repository is public.

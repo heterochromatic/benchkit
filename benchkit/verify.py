@@ -1,4 +1,4 @@
-"""Shared independent verifier (methodology 5.1).
+"""Shared independent verifier.
 
 Emails: ZeroBounce single-validate API, or an imported results file (e.g. a
 ZeroBounce bulk export). Phones: Twilio Lookup's line type intelligence, or an

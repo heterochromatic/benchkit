@@ -223,7 +223,7 @@ def run_agent(cfg, run_id, dry_run=False) -> dict:
         if shim_dir:
             env["PATH"] = shim_dir + os.pathsep + env.get("PATH", "")
     # shortcut: a temp folder blocks relative paths to the answer keys, not an absolute-path search;
-    # the compliance check flags that, and a container (TPC sim / Harbor) closes it fully.
+    # the compliance check flags that, and a container (Harbor) closes it fully.
     ws = tempfile.mkdtemp(prefix="bench-agent-")
     shutil.copytree(d / "input", f"{ws}/input")
     for sub in ("output", "work"):

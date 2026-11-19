@@ -21,7 +21,7 @@ Python 3.10+, standard library only.
 In a bench repo, either:
 
 ```bash
-python3 -m venv .venv && .venv/bin/pip install "benchkit @ git+https://github.com/heterochromatic/benchkit@v0.1.0"
+python3 -m venv .venv && .venv/bin/pip install "benchkit @ git+https://github.com/heterochromatic/benchkit@v0.1.3"
 ```
 
 or keep a checkout of benchkit next to the bench repo. Each bench repo's `./bench` shim falls back to `../benchkit`.
@@ -70,23 +70,23 @@ To add scorer metrics to `summary.csv` as medians, list them under `summary_metr
 # providers/__init__.py
 from benchkit.adapters import Adapter, http_json, require_env, result
 
-class ProviderBMatch(Adapter):
-    name = "provider_b_match"        # stable endpoint ID
-    platform = "provider_b"          # key in config platforms
-    docs_url = "https://docs.example.com/people-match"
-    required_env = ("PROVIDER_B_API_KEY",)
-    pause_s = 1.5
+class ExampleEndpoint(Adapter):
+    name = "example_lookup"          # stable endpoint ID
+    platform = "example"             # key in config platforms
+    docs_url = "https://example.com/docs"
+    required_env = ("EXAMPLE_API_KEY",)
 
     def enrich(self, row):           # or enrich_batch(rows, save, journal) for batch APIs
-        status, body, ms, audit = http_json("POST", "...", headers={"x-api-key": ...}, body={...})
+        (key,) = require_env(*self.required_env)
+        status, body, ms, audit = http_json("POST", "...", headers={"Authorization": f"Bearer {key}"}, body={...})
         return result({"email": ...}, ok=status == 200, status=status, latency_ms=ms, audit=audit)
 
-ADAPTERS = {a.name: a for a in (ProviderBMatch(),)}
+ADAPTERS = {a.name: a for a in (ExampleEndpoint(),)}
 ```
 
 ```bash
 bench list-providers
-bench run --task W1 --env "self-serve monthly" --endpoints provider_b_match --limit 5  # smoke test, recorded as Void
+bench run --task W1 --env "self-serve monthly" --endpoints example_lookup --limit 5    # smoke test, recorded as Void
 bench run --task W1 --env "self-serve monthly"                                       # every endpoint, one run each
 bench run --resume R0007                                                             # finished rows are never re-called
 ```
@@ -120,7 +120,7 @@ bench manifest    # results/manifest.json: SHA-256 of every file in every run fo
 bench audit       # hashes match, every run has a status, no credential survived, results clean
 ```
 
-After `freeze`, any change to `config/bench.json` is refused until it's logged and re-frozen.
+After `freeze`, any change to `config/bench.json` is refused until it's logged and re-frozen. `freeze` fails if a task's dataset is missing, and never overwrites an existing run plan: to re-freeze, delete `results/run-plan.json` first.
 
 ## Published vs private
 
@@ -140,7 +140,7 @@ The committed `config/bench.json` names an anonymized vendor only by its label (
 
 ## Commands
 
-`new`, `start`, `stop`, `usage`, `record`, `verify`, `score`, `prompt`, `agent`, `agent-batch`, `list-providers`, `run`, `reset-check`, `summary`, `freeze`, `manifest`, `audit`, `check-anon`, `list`, `show`. Run `bench <command> -h` for options.
+Run `bench -h` for the full list and `bench <command> -h` for options.
 
 ## Tests
 

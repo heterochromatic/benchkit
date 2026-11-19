@@ -2,6 +2,15 @@
 
 Bench repos pin a tag. A frozen bench (tagged `v1.0-prereg`) never moves to a newer benchkit tag mid-run.
 
+## v0.1.3 (2026-11-19)
+
+- `bench freeze` refuses to overwrite an existing `results/run-plan.json` (delete it to re-freeze), and fails if a task's dataset is missing. Before, it overwrote the plan and froze an empty checksum with a warning. `artifacts.freeze` now returns the plan only.
+- `bench audit` reports an audit file that isn't valid JSON instead of skipping it.
+- Version numbers in `pyproject.toml` and `benchkit.__version__` match the tag (they still said 0.1.0 in v0.1.1 and v0.1.2, so run plans and manifests from those tags record `benchkit_version` 0.1.0).
+- Repository moved to github.com/promptingcompany; the install line pins this tag.
+- Docs and messages: the README example adapter is a neutral `ExampleEndpoint`; the command list points to `bench -h`; error messages and docstrings no longer cite one benchmark's methodology section numbers; `bench usage --from-cli` help matches what it records (the balance drop).
+- Tests for the two behaviour changes.
+
 ## v0.1.2 (2026-11-18)
 
 - `blind-sample` puts a sheet ID in every item ID, so a filled sheet from an earlier sampling is refused on import instead of being remapped to other runs.
@@ -30,7 +39,7 @@ Bench repos pin a tag. A frozen bench (tagged `v1.0-prereg`) never moves to a ne
 - `bench` reads the bench repo's `.env` (existing environment variables win).
 - Answer-key helpers in `benchkit.scoring`: `on_domain`, `accepted_email` (verifier-valid and on the company's domain), `domain_aliases`, `load_gold`, `gold_metrics` (precision and recall against known-correct emails and phones).
 
-## Fixes before v1.0-prereg (2026-11-04, from the bloat audit)
+## Fixes before v1.0-prereg (2026-11-04)
 
 - **Scoring:** `same()` compares whole words, so "CTO" no longer matches "Director", nor "AI" "Mailchimp". Answer-key values marked unknown or blank are excluded (`scoring.known`), including in `gold_metrics`.
 - **Batch runs never pay twice:** `enrich_batch(rows, save, journal)` saves each row as it finishes and journals paid-for work in flight (`journal.json`).
@@ -41,7 +50,7 @@ Bench repos pin a tag. A frozen bench (tagged `v1.0-prereg`) never moves to a ne
 - `median_latency_ms` is a true median. `http_json` turns timeouts and dropped connections into failed cells instead of crashing.
 - `bench usage --unit` names the balance unit instead of recording zero. `verify --mode import` without `--email-results` gives an error, not a traceback. The platform lock is created atomically. `agent-batch` refuses tasks not in `agent.tasks`.
 - Column `seat_cost_3_users_usd_month` renamed `seat_cost_usd_month` (seats come from `scenario.users`).
-- Cuts: one module loader (`paths.load_module`) for scorers and providers, one secret-key list and redaction marker, one phone normalizer, `cfg_description` removed, roadmap moved out of the README.
+- Simplified: one module loader (`paths.load_module`) for scorers and providers, one secret-key list and redaction marker, one phone normalizer; `cfg_description` removed.
 
 ## Anonymized vendors (2026-11-04)
 
