@@ -4,7 +4,7 @@ Bench repos pin a tag. A frozen bench (tagged `v1.0-prereg`) never moves to a ne
 
 ## v0.1.0 (2026-11-10)
 
-- The version that scored every published result in clay-bench-ease-pricing and clay-bench-enrichment-waterfall. Counted runs (7–10 November 2026) used commits from `c58a40e` to this tag; the changes in that span were verifier retries, Twilio error handling, agent key isolation and manifest file-name hashing. None changes the scoring rules, and every published score was recomputed at this tag.
+- The version that scored every published result in clay-gtm-agent-benchmark and clay-waterfall-enrichment-benchmark. Counted runs (7–10 November 2026) used commits from `c58a40e` to this tag; the changes in that span were verifier retries, Twilio error handling, agent key isolation and manifest file-name hashing. None changes the scoring rules, and every published score was recomputed at this tag.
 
 - Extracted from the Clay ease-of-use and pricing harness (methodology v0.5).
 - Scorers moved out: each bench repo supplies `scoring/scorers.py` (`SCORERS`, `output_contacts`).
