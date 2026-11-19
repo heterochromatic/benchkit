@@ -1,0 +1,2 @@
+# Fake keys in the redaction tests (checked by hand, 2026-11-18). Add only reviewed test fixtures here.
+9c746e94cd66f341424d0c610ead32af61028cc8:tests/test_benchkit.py:generic-api-key:86
