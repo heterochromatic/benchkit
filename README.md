@@ -21,7 +21,7 @@ Python 3.10+, standard library only.
 In a bench repo, either:
 
 ```bash
-python3 -m venv .venv && .venv/bin/pip install "benchkit @ git+https://github.com/<org>/benchkit@v0.1.0"
+python3 -m venv .venv && .venv/bin/pip install "benchkit @ git+https://github.com/heterochromatic/benchkit@v0.1.0"
 ```
 
 or keep a checkout of benchkit next to the bench repo. Each bench repo's `./bench` shim falls back to `../benchkit`.
