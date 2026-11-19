@@ -1,6 +1,6 @@
 # benchkit
 
-Shared harness for The Prompting Company's public GTM benchmarks. Every `clay-bench-*` repo pins a benchkit tag and supplies only what's specific to it.
+Shared harness for The Prompting Company's public GTM benchmarks. Every benchmark repo (clay-gtm-agent-benchmark, clay-waterfall-enrichment-benchmark) pins a benchkit tag and supplies only what's specific to it.
 
 | benchkit provides | Each bench repo provides |
 |---|---|

@@ -147,7 +147,6 @@ def twilio_line_type(phone, sid, secret, timeout=30) -> str:
     lti = data.get("line_type_intelligence") or {}
     code = lti.get("error_code")
     if code in ACCOUNT_ERRORS:
-        # the account can't run the check (e.g. a trial out of credit): nothing was checked, so stop
         raise VerifyError(f"Twilio line type unavailable (error {code}); check the Twilio account, then rerun verify")
     if code:
         return f"unavailable-{code}"   # about this number (e.g. 60600 out of coverage): checked, not a valid mobile
