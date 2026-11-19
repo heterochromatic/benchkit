@@ -149,6 +149,14 @@ def _save_cell(d, input_id, res):
     paths.write_json(d / "cells" / f"{input_id}.json", {"input_id": input_id, **res, "attempts": attempts})
 
 
+def _usage_needs_manual(run_id):
+    """After a StopRun (e.g. out of credits), a top-up before the resume would land between the two balance
+    readings, so automatic balance usage would be wrong: the operator records it by hand."""
+    run = runs.load(run_id)
+    run["usage_manual_required"] = True
+    runs.save(run)
+
+
 def run_endpoint(cfg, run_id, limit=0, log=print):
     """Execute (or resume) a scripted run. Writes cells/, audit/ and output/output.csv."""
     run = runs.load(run_id)
@@ -162,6 +170,10 @@ def run_endpoint(cfg, run_id, limit=0, log=print):
     if limit:
         rows = rows[:limit]
     usage_balance = run["usage_method"] == "balance"
+    if not limit and run.get("status_source") == "smoke-test":
+        # A smoke test resumed in full: measure usage and the end time again, over the whole run.
+        run["usage_units"], run["stopped_at"] = {}, None
+        runs.save(run)
     if not run["started_at"]:
         if usage_balance:
             run["balance_before_auto"] = adapter.balance()
@@ -177,12 +189,17 @@ def run_endpoint(cfg, run_id, limit=0, log=print):
         if attempt and adapter.retry_wait_s:
             time.sleep(adapter.retry_wait_s)
         if hasattr(adapter, "enrich_batch"):
-            adapter.enrich_batch(pending, lambda i, res: _save_cell(d, i, res), journal)
+            try:
+                adapter.enrich_batch(pending, lambda i, res: _save_cell(d, i, res), journal)
+            except StopRun:
+                _usage_needs_manual(run_id)
+                raise
             continue
         for i, row in enumerate(pending, 1):
             try:
                 res = adapter.enrich(row)
             except StopRun:
+                _usage_needs_manual(run_id)
                 raise
             except AdapterError as e:
                 res = result(ok=False, error=str(e))
@@ -202,7 +219,9 @@ def run_endpoint(cfg, run_id, limit=0, log=print):
                 w.writerow({"input_id": r["input_id"], **cells[r["input_id"]].get("fields", {})})
         if not run["stopped_at"]:
             run = runs.stop(run_id)
-        if usage_balance and not run["usage_units"]:
+        if usage_balance and not run["usage_units"] and run.get("usage_manual_required"):
+            log(f"{run_id}: usage not recorded: the run stopped part-way, so record it with `bench usage --before/--after`")
+        elif usage_balance and not run["usage_units"]:
             before, after = run.get("balance_before_auto"), adapter.balance()
             if before is not None and after is not None:
                 runs.set_usage(run_id, before=before, after=after)

@@ -197,6 +197,33 @@ class BenchkitTest(unittest.TestCase):
         finally:
             acme.stop_at = None
 
+    def test_smoke_resumed_in_full_measures_usage_over_whole_run(self):
+        acme = type(adapters.registry()["fake_acme_match"])
+        acme._balance = 100.0
+        cli.main(["run", "--task", "X1", "--env", "self-serve monthly", "--endpoints", "fake_acme_match", "--limit", "1"])
+        rid = runs.all_runs()[0]["run_id"]
+        self.assertEqual(sum(runs.load(rid)["usage_units"].values()), 1.0)
+        cli.main(["run", "--resume", rid])
+        r = runs.load(rid)
+        self.assertEqual(sum(r["usage_units"].values()), 3.0)   # all three paid rows, not just the smoke row
+        self.assertIsNone(r["status"])
+
+    def test_stoprun_leaves_usage_to_the_operator(self):
+        acme = type(adapters.registry()["fake_acme_match"])
+        acme.stop_at = "2"
+        try:
+            with self.assertRaises(SystemExit):
+                cli.main(["run", "--task", "X1", "--env", "self-serve monthly", "--endpoints", "fake_acme_match"])
+            rid = runs.all_runs()[0]["run_id"]
+            acme.stop_at = None
+            acme._balance += 50   # a top-up between the stop and the resume
+            cli.main(["run", "--resume", rid])
+            r = runs.load(rid)
+            self.assertTrue(r["usage_manual_required"])
+            self.assertFalse(r["usage_units"])   # not computed from readings that span the top-up
+        finally:
+            acme.stop_at = None
+
     def test_usage_unit_cache_merge_and_import_guard(self):
         r = runs.new_run(self.cfg, "X1", "acme", "human", "OP01", "first-timer", "self-serve monthly")
         cli.main(["usage", r["run_id"], "--before", "50", "--after", "40", "--unit", "export_credits"])

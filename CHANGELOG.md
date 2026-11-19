@@ -2,6 +2,10 @@
 
 Bench repos pin a tag. A frozen bench (tagged `v1.0-prereg`) never moves to a newer benchkit tag mid-run.
 
+## v0.1.1 (2026-11-18)
+
+- Scripted runs: a smoke test resumed in full now re-measures balance usage and the stop time over the whole run (v0.1.0 kept the smoke test's). After a `StopRun` (e.g. out of credits), automatic balance usage is skipped and the operator records it with `bench usage --before/--after`, because a top-up can fall between the readings. Two tests added. Agent runs and scoring are unchanged.
+
 ## v0.1.0 (2026-11-10)
 
 - The version that scored every published result in clay-gtm-agent-benchmark and clay-waterfall-enrichment-benchmark. Counted runs (7–10 November 2026) used commits from `c58a40e` to this tag; the changes in that span were verifier retries, Twilio error handling, agent key isolation and manifest file-name hashing. None changes the scoring rules, and every published score was recomputed at this tag.
