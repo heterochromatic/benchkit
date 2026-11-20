@@ -1,6 +1,6 @@
 # benchkit
 
-Shared harness for The Prompting Company's public GTM benchmarks. Every benchmark repo (clay-gtm-agent-benchmark, clay-waterfall-enrichment-benchmark) pins a benchkit tag and supplies only what's specific to it.
+Shared harness for The Prompting Company's GTM benchmarks. The public ones are [clay-waterfall-enrichment-benchmark](https://github.com/promptingcompany/clay-waterfall-enrichment-benchmark) and [clay-precall-briefs-benchmark](https://github.com/promptingcompany/clay-precall-briefs-benchmark); benchkit also runs a study that isn't published. Every benchmark repo pins a benchkit tag and supplies only what's specific to it.
 
 | benchkit provides | Each bench repo provides |
 |---|---|
@@ -104,7 +104,7 @@ Each row's result goes to `cells/<input_id>.json` as soon as it arrives, and its
 bench sanity          # every task: empty output accepts nothing; the scorers' ORACLES (answer key as output) score as expected
 bench export-public   # the scorers' PUBLIC_EXPORTS: non-personal key rows outside the held-out set, to datasets/public/
 bench compliance R7   # re-check an agent transcript for hosts outside allowed_domains and any reach for answer keys
-bench blind-sample --task T2   # mixed, shuffled review sheet with the platform hidden; then bench blind-import
+bench blind-sample --task T6   # mixed, shuffled review sheet with the platform hidden; then bench blind-import
 ```
 
 - **Agent isolation:** agent runs execute in a temp folder outside the bench repo holding only their input; output and work are copied back. Keep `WebFetch`/`WebSearch` out of `agent.allowed_tools`; set `allowed_domains` per platform (competitors' in the private overlay) and `agent.allowed_domains_common`. Flagged runs need `--compliance_reviewed yes` or a Void status; `bench audit` fails otherwise.
